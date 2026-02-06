@@ -1,0 +1,7 @@
+.sl-elements-api.sl-flex.sl-inset-0.sl-h-full {
+  height: 100vh;
+}
+
+[data-test="security-row"], [data-test="additional-info"] {
+  display: none;
+}
