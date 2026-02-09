@@ -59,6 +59,13 @@ parameters:
     type: string
     description: The table of records.
 
+  TableNameQuery:
+    in: query
+    name: table_name
+    required: true
+    type: string
+    description: The table of records.
+
   RecordFilter:
     in: query
     in: query
@@ -75,21 +82,19 @@ parameters:
               "type": "$having_value",
               "is_filter_exclude": false
             }
-          ],
+          ]
         }
 
   RecordIds:
-    name: record_ids
+    name: record_ids[]
     in: query
     required: true
     description: List of record IDs to delete
-    schema:
-      type: array
-      items:
-        type: string
-        format: uuid
-    style: form
-    explode: true
+    type: array
+    items:
+      type: string
+      format: uuid
+    collectionFormat: multi
 
   RecordViewId:
     in: query
@@ -123,8 +128,8 @@ parameters:
 
   RecordId:
     description: The record ID
-    in: query
-    name: recordId
+    in: path
+    name: record_id
     required: true
     type: string
 
@@ -139,7 +144,7 @@ tags:
     name: Record
 
 paths:
-  '/workspaces/{workspace_id}/{table_name}/records/':
+  '/workspaces/{workspace_id}/{table_name}/records':
     get:
       description: List all the records in table
       operationId: records
@@ -216,33 +221,6 @@ paths:
       summary: List records
       tags:
         - Records
-  '/workspaces/{workspace_id}/{table_name}/records':
-    get:
-      description: Retrieve a sub account under the master account. <aside>Your account must be a master account and have this privilege to read sub accounts. Zoom only assigns this privilege to trusted partners</aside>.
-      operationId: account
-      parameters:
-        - $ref: '#/parameters/WorkspaceId'
-        - $ref: '#/parameters/TableName'
-        - $ref: '#/parameters/RecordId'
-      responses:
-        '200':
-          description: Record returned
-          schema:
-            title: Records List
-            type: object
-            description: Record object in record list
-            properties:
-              success:
-                description: Indicates whether the upsert operation was successful
-                type: boolean
-              data:
-                description: The record response
-                $ref: '#/definitions/Record'
-        # '404':
-        #   description: User not found
-      summary: Record
-      tags:
-        - Records
     post:
       description: Insert or update a record in current table. <aside>Your account must be a master account and have this privilege to create sub account. Zoom only assigns this privilege to trusted partners. The created user will not receive a confirmation email.</aside>.
       operationId: recordCreate
@@ -275,8 +253,9 @@ paths:
       tags:
         - Records
     delete:
-      description: Disassociate a sub account from the master account. This will leave the account intact but the sub account will not longer be associated with the master account.
-      operationId: accountDisassociate
+      summary: Delete records
+      description: Remove multiple records from a table by record IDs
+      operationId: deleteRecords
       parameters:
         - $ref: '#/parameters/WorkspaceId'
         - $ref: '#/parameters/TableName'
@@ -295,7 +274,33 @@ paths:
                 example: 'success_only'
         # '404':
         #   description: Account not found
-      summary: Delete records
+      tags:
+        - Records
+  '/workspaces/{workspace_id}/record/{record_id}':
+    get:
+      description: Retrieve a record by ID. <aside></aside>
+      operationId: record
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/TableNameQuery'
+        - $ref: '#/parameters/RecordId'
+      responses:
+        '200':
+          description: Record returned
+          schema:
+            title: Records List
+            type: object
+            description: Record object in record list
+            properties:
+              success:
+                description: Indicates whether the upsert operation was successful
+                type: boolean
+              data:
+                description: The record response
+                $ref: '#/definitions/Record'
+        # '404':
+        #   description: User not found
+      summary: Record
       tags:
         - Records
 
