@@ -8,7 +8,7 @@ info:
     email: support@pancake.vn
     name: Pancake CRM Team
     url: 'https://zalo.me/0972273341'
-  description: API for retrieving page data, generating access tokens, and listing conversations on Pancake CRM.
+  description: API for retrieving, updating, and deleting records from Pancake CRM.
   license:
     name: MIT
     url: 'https://opensource.org/licenses/MIT'
@@ -222,7 +222,7 @@ paths:
       tags:
         - Records
     post:
-      description: Insert or update a record in current table. <aside>Your account must be a master account and have this privilege to create sub account. Zoom only assigns this privilege to trusted partners. The created user will not receive a confirmation email.</aside>.
+      description: Insert or update a record in current table. <aside>Provide the record ID in the parameters to update an existing record. Otherwise, a new record will be created.</aside>
       operationId: recordCreate
       parameters:
         - $ref: '#/parameters/WorkspaceId'
