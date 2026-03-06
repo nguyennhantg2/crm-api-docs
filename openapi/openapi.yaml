@@ -346,18 +346,18 @@ definitions:
         items:
           type: string
           format: uuid
-      extra_infor:
-        description: Dynamic custom fields defined by users
-        type: object
-        additionalProperties: true
-      additionalProperties:
-        description: User-defined custom fields
-        oneOf:
-          - type: string
-          - type: number
-          - type: boolean
-          - type: array
-          - type: object
+      # extra_infor:
+      #   description: Dynamic custom fields defined by users
+      #   type: object
+      #   additionalProperties: true
+      # additionalProperties:
+      #   description: User-defined custom fields
+      #   oneOf:
+      #     - type: string
+      #     - type: number
+      #     - type: boolean
+      #     - type: array
+      #     - type: object
     required:
       - name
     type: object
