@@ -185,38 +185,7 @@ paths:
               entries:
                 description: List of record objects
                 items:
-                  properties:
-                    id:
-                      description: Record ID
-                      format: uuid
-                      type: string
-                    name:
-                      description: Record name
-                      type: string
-                    phone_number:
-                      description: Record phone number
-                      type: string
-                    email:
-                      description: Record owner email
-                      type: string
-                    owner:
-                      description: List of user IDs who own this record
-                      type: array
-                      items:
-                        type: string
-                        format: uuid
-                    extra_infor:
-                      description: Dynamic custom fields defined by users
-                      type: object
-                      additionalProperties: true
-                    additionalProperties:
-                      description: User-defined custom fields
-                      oneOf:
-                        - type: string
-                        - type: number
-                        - type: boolean
-                        - type: array
-                        - type: object
+                  $ref: '#/definitions/Record'
                 type: array
       summary: List records
       tags:
@@ -322,8 +291,10 @@ paths:
                 description: Indicates whether the upsert operation was successful
                 type: boolean
               data:
-                description: The source response
-                $ref: '#/definitions/Source'
+                description: List of source objects
+                items:
+                  $ref: '#/definitions/Source'
+                type: array
         # '404':
         #   description: User not found
       summary: Sources
@@ -424,7 +395,6 @@ definitions:
       The origin/source of the customer (lead source).
       This field is shared and consistent across the entire workspace.
       Common values include: Facebook, Google, TikTok, Whatsapp, Shopee, Zalo, etc.
-    example: "Facebook"
     properties:
       id:
         description: Source ID
