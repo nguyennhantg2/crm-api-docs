@@ -304,6 +304,32 @@ paths:
       tags:
         - Records
 
+  '/workspaces/{workspace_id}/sources':
+    get:
+      description: List all the sources in workspace
+      operationId: source
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Sources returned
+          schema:
+            title: Source List
+            type: object
+            description: Source object in source list
+            properties:
+              success:
+                description: Indicates whether the upsert operation was successful
+                type: boolean
+              data:
+                description: The source response
+                $ref: '#/definitions/Source'
+        # '404':
+        #   description: User not found
+      summary: Sources
+      tags:
+        - Sources
+
 definitions:
   Record:
     description: 'Creates a new record if it does not exist, otherwise updates the existing record based on a unique key'
@@ -324,6 +350,36 @@ definitions:
       email:
         description: Record owner email
         type: string
+      birthday:
+        description: Record creation date/time
+        format: date-time
+        type: string
+      source:
+        type: array
+        items:
+          type: integer
+          # format: integer
+          $ref: '#/definitions/Source/properties/id'
+        description: |
+          Array of integer IDs referencing the sources this lead came from.
+          [Source schema](#/schemas/Source)
+        example: [-11]
+      full_address:
+        type: string
+        description: |
+          The full address of the lead/customer.
+
+          This field stores the complete physical or mailing address associated with the lead record.
+          It is typically used for:
+          - Delivery/shipping purposes
+          - Location-based segmentation or targeting
+          - Compliance and reporting (e.g., geographic analytics)
+          - Contact verification
+
+          Recommended format (Vietnam common style):
+          - Street number + Street name, Ward/Commune, District, City/Province, Country
+        example:
+          "Số 126 Hàng Trống, Phường Hoàn Kiếm, Hà Nội, Việt Nam"
       created_by:
         description: ID of the user who created the record
         format: uuid
@@ -359,6 +415,54 @@ definitions:
       #     - type: array
       #     - type: object
     required:
+      - name
+    type: object
+
+  Source:
+    type: string
+    description: |
+      The origin/source of the customer (lead source).
+      This field is shared and consistent across the entire workspace.
+      Common values include: Facebook, Google, TikTok, Whatsapp, Shopee, Zalo, etc.
+    example: "Facebook"
+    properties:
+      id:
+        description: Source ID
+        format: integer
+        type: string
+        description: >
+          Unique identifier (Integer) of the customer source record.
+      workspace_id:
+          type: integer
+          example: 123
+      name:
+        type: string
+        example: "Facebook"
+      parent_id:
+        type: integer
+        nullable: true
+        example: 50
+      image:
+        type: string
+        nullable: true
+        example: "https://crm.pancake.vn/v2/images/logo.svg"
+      is_removed:
+        type: boolean
+        default: false
+      custom_id:
+        type: string
+        nullable: true
+      link:
+        type: string
+        nullable: true
+      created_at:
+        type: string
+        format: date-time
+      updated_at:
+        type: string
+        format: date-time
+    required:
+      - workspace_id
       - name
     type: object
 x-explorer-enabled: false
