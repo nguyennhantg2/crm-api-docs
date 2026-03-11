@@ -208,14 +208,40 @@ paths:
           schema:
             title: Records List
             type: object
-            description: Record object in record list
+            description: Response object
             properties:
               success:
                 description: Indicates whether the upsert operation was successful
                 type: boolean
               data:
-                description: The record response
+                description: The record object
                 $ref: '#/definitions/Record'
+        '403':
+          description: "Forbidden"
+          schema:
+            title: Response object
+            type: object
+            description: Response object
+            properties:
+              success:
+                description: Indicates whether the upsert operation was successful
+                type: boolean
+              message:
+                type: object
+        '422':
+          description: "Customer information cannot be updated once it has been canceled, converted, or merged"
+          schema:
+            title: Response object
+            type: object
+            description: Response object
+            properties:
+              success:
+                description: Indicates whether the upsert operation was successful
+                type: boolean
+              message:
+                type: string
+                enum:
+                  - LEAD_CANNOT_UPDATE_FROM_CANCEL
         # '404':
         #   description: "Record doesn't exist"
       summary: Upsert record
