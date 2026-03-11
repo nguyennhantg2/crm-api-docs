@@ -364,7 +364,7 @@ definitions:
         description: |
           Array of integer IDs referencing the sources this lead came from.
           [Source schema](#/schemas/Source)
-        example: [-11]
+        example: ["-11"]
       full_address:
         type: string
         description: |
