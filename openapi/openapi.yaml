@@ -134,7 +134,7 @@ parameters:
     type: string
 
   Cursor:
-    description: Cursor token used for Elasticsearch cursor-based pagination. Pass the value returned from the previous response to retrieve the next set of results.
+    description: Pagination cursor from the previous page. The cursor value is returned in the previous response.
     in: query
     name: cursor
     type: string
@@ -167,27 +167,25 @@ paths:
             properties:
               cursor:
                 type: string
-                description:
-                  Cursor token used for Elasticsearch cursor-based pagination
-                $ref: '#/parameters/Cursor'
-              page_number:
-                default: 1
-                description: The page number of current results
-                type: integer
-              page_size:
-                default: 30
-                description: The number of records returned within a single API call
-                enum:
-                  - 30
-                  - 50
-                  - 100
-                type: integer
-              total_entries:
-                description: The number of all records available across pages
-                type: integer
-              total_pages:
-                description: The number of items returned on this page
-                type: integer
+                description: Pagination cursor of the current page, used as a parameter to retrieve records from the next page
+              # page_number:
+              #   default: 1
+              #   description: The page number of current results
+              #   type: integer
+              # page_size:
+              #   default: 30
+              #   description: The number of records returned within a single API call
+              #   enum:
+              #     - 30
+              #     - 50
+              #     - 100
+              #   type: integer
+              # total_entries:
+              #   description: The number of all records available across pages
+              #   type: integer
+              # total_pages:
+              #   description: The number of items returned on this page
+              #   type: integer
               entries:
                 description: List of record objects
                 items:
