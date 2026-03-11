@@ -134,10 +134,11 @@ parameters:
     type: string
 
   Cursor:
-    description: Next page token is used to paginate through large result sets. A next page token will be returned whenever the set of available results exceed the current page size. The expiration period for this token is 15 minutes.
+    description: Cursor token used for Elasticsearch cursor-based pagination. Pass the value returned from the previous response to retrieve the next set of results.
     in: query
     name: cursor
     type: string
+    example: "g2wAAAADYR5uBgCKPA7SnAFtAAAAJDJmOTQxZWZlLWQ5YTMtNGQ5YS1hZmZlLWUxMjNiMDZiOGE0NGo"
 
 tags:
   - description: Upsert Record
@@ -155,7 +156,7 @@ paths:
         - $ref: '#/parameters/RecordViewId'
         - $ref: '#/parameters/PageSize'
         - $ref: '#/parameters/PageNumber'
-        # - $ref: '#/parameters/Cursor'
+        - $ref: '#/parameters/Cursor'
       responses:
         '200':
           description: Record list returned
@@ -164,6 +165,11 @@ paths:
             type: object
             description: Records List
             properties:
+              cursor:
+                type: string
+                description:
+                  Cursor token used for Elasticsearch cursor-based pagination
+                $ref: '#/parameters/Cursor'
               page_number:
                 default: 1
                 description: The page number of current results
@@ -217,7 +223,7 @@ paths:
                 description: The record object
                 $ref: '#/definitions/Record'
         '403':
-          description: "Forbidden"
+          description: "Forbidden, has not permissions"
           schema:
             title: Response object
             type: object
