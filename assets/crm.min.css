@@ -1,7 +1,40 @@
 .sl-elements-api.sl-flex.sl-inset-0.sl-h-full {
-  height: 100vh;
+  height: calc(100vh - 47px);
 }
 
-[data-test="security-row"], [data-test="additional-info"] {
+[data-test="security-row"],
+[data-test="additional-info"] {
   display: none;
+}
+
+.sl-product-image.sl-overflow-x-hidden {
+  --shadow-md: 0px 0px 0 0 var(--color-text) !important;
+  --tw-translate-x: 0px !important;
+  --tw-translate-y: 0px !important;
+}
+
+.doc-tabs {
+  display: flex;
+  align-items: center;
+  background: #0f1318;
+  padding: 0 24px;
+  border-bottom: 1px solid #2a2f3a;
+  gap: 4px;
+}
+
+.doc-tabs a {
+  display: inline-block;
+  padding: 12px 18px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: #8a9bb0;
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.doc-tabs a.active {
+  color: #ffffff;
+  border-bottom-color: #4a90d9;
 }

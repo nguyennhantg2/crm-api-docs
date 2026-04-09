@@ -1,0 +1,244 @@
+openapi: 3.0.0
+info:
+  title: Pancake CRM Webhooks
+  version: 2.0.0
+  description: |
+    Pancake CRM Webhooks allows you to receive real-time HTTP notifications of changes to specific objects in the Pancake system — instead of constantly polling the API.
+
+    ## How It Works
+
+    When an event occurs (e.g. a new message from a customer), Pancake sends an **HTTP POST** request to the endpoint URL you have registered, with a JSON body containing the full details of the event.
+
+    ---
+
+    ## Setup Requirements
+
+    1. **Create a server endpoint** — Your endpoint must accept HTTP POST requests and return HTTP `200` to acknowledge receipt.
+
+    2. **Configure in settings** — Set up the webhook URL in your workspace's tools settings (requires admin permission).
+        <figure style="margin: 16px 0; max-width: 800px;">
+          <img src="../assets/images/which-webhook.png" alt="Verify your endpoint URL" style="max-width: 800px; height: auto; border: 1px solid #ddd; border-radius: 8px;" />
+          <figcaption style="font-size: 14px; color: #666; font-style: italic; margin-top: 8px;">Verify your endpoint URL</figcaption>
+        </figure>
+
+    ---
+
+    ## Event Types
+
+    | Event | Description |
+    |-------|-------------|
+    | [`record`](https://developer.pancake.biz/webhook#/webhooks/messaging/post) | Triggered when a record is changed |
+
+    ---
+    <br/>
+
+    ## Webhook Suspension Due to High Error Rate
+
+      To maintain system stability and avoid sending events to unavailable endpoints, Pancake may **temporarily suspend a webhook** when a high error rate is detected.
+
+      A webhook will be **automatically suspended** if the following conditions occur **within a 30-minute period**:
+
+      - The **error rate exceeds 80%**
+      - The **total number of failed requests is greater than or equal to 300**
+
+      A request is considered **failed** in the following cases:
+
+      - The endpoint returns an **HTTP status code outside the 2xx range**
+      - The endpoint **times out or does not respond**
+      - A **network connection error** occurs when sending the webhook request
+
+      When a webhook is suspended, Pancake will **stop sending webhook events** to the configured endpoint until the webhook is re-enabled.
+
+    ---
+
+
+    ## How to Re-enable the Webhook
+
+      To resume receiving webhook events:
+
+      1. Ensure your webhook endpoint is **working correctly and can return a valid response**.
+      2. Log in to **Pancake CRM**.
+      3. Go to **Settings Tools**.
+      4. Open tab **Webhook - API**.
+      5. **Enable the webhook again**.
+
+      Once re-enabled, Pancake CRM will continue sending **new webhook events** to your endpoint.
+
+      <img src="../assets/images/which-webhook-config.png" alt="Webhook Settings" style="max-width: 100%; height: auto; border: 1px solid #ddd; border-radius: 8px; margin-top: 10px;" />
+
+    ---
+
+
+    ## Best Practices for Webhook Endpoints
+
+      To avoid webhook suspension and ensure reliable event delivery, we recommend the following:
+
+      - **Return HTTP 200 quickly** after receiving the webhook request.
+      - Process webhook data **asynchronously** (e.g., using a queue or background job).
+      - Ensure the endpoint response time is **short (preferably under 5 seconds)**.
+      - Implement **retry-safe (idempotent) processing** in case events are delivered more than once.
+      - Monitor your endpoint for **availability and error rates**.
+
+      Following these practices helps maintain stable webhook integration and prevents automatic suspension.
+
+  contact:
+    name: Pancake Support
+    url: 'https://www.pancake.biz/contact'
+
+webhooks:
+  record:
+    post:
+      summary: Table data
+      description: |
+        Pancake CRM sends an HTTP POST request to your registered endpoint when a record is changed.
+
+        **Note:** Your endpoint must return HTTP `200` to acknowledge the webhook.
+
+        **Error notifications:** If your endpoint returns a non-`200` status or fails to respond, Pancake CRM will send an error notification to the email address registered with your webhook configuration.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RecordPayload'
+      responses:
+        '200':
+          description: Your endpoint should return HTTP 200 to confirm the webhook was received successfully.
+        '4XX':
+          description: |
+            Any non-`200` response is treated as a delivery failure. Pancake CRM will retry according to its retry policy and send an error notification to the email registered with your webhook configuration.
+
+components:
+  schemas:
+    RecordPayload:
+      properties:
+        id:
+          description: Record ID
+          format: uuid
+          type: string
+          description: >
+            Record ID. If provided, the record will be updated.
+            If omitted, a new record will be created.
+        name:
+          description: Record name
+          type: string
+        phone_number:
+          description: Record phone number
+          type: string
+        email:
+          description: Record owner email
+          type: string
+        birthday:
+          description: The customer's/lead's date of birth (ISO 8601 format).
+          format: date-time
+          type: string
+        source:
+          type: array
+          items:
+            type: integer
+            # format: integer
+            $ref: '#/components/schemas/Source/properties/id'
+          description: |
+            Array of integer IDs referencing the sources this lead came from.
+            [Source schema](#/schemas/Source)
+          example: ["-11"]
+        full_address:
+          type: string
+          description: |
+            The full address of the lead/customer.
+
+            This field stores the complete physical or mailing address associated with the lead record.
+            It is typically used for:
+            - Delivery/shipping purposes
+            - Location-based segmentation or targeting
+            - Compliance and reporting (e.g., geographic analytics)
+            - Contact verification
+
+            Recommended format (Vietnam common style):
+            - Street number + Street name, Ward/Commune, District, City/Province, Country
+          example:
+            "Số 126 Hàng Trống, Phường Hoàn Kiếm, Hà Nội, Việt Nam"
+        created_by:
+          description: ID of the user who created the record
+          format: uuid
+          type: string
+        modified_by:
+          description: ID of the user who last modified the record
+          format: uuid
+          type: string
+        created_on:
+          description: The date and time when the record was last created.
+          format: date-time
+          type: string
+        modified_on:
+          description: The date and time when the record was last modified.
+          format: date-time
+          type: string
+        owner:
+          description: List of user IDs who own this record
+          type: array
+          items:
+            type: string
+            format: uuid
+        # extra_infor:
+        #   description: Dynamic custom fields defined by users
+        #   type: object
+        #   additionalProperties: true
+        # additionalProperties:
+        #   description: User-defined custom fields
+        #   oneOf:
+        #     - type: string
+        #     - type: number
+        #     - type: boolean
+        #     - type: array
+        #     - type: object
+      required:
+        - name
+      type: object
+
+    Source:
+      type: string
+      description: |
+        The origin/source of the customer (lead source).
+        This field is shared and consistent across the entire workspace.
+        Common values include: Facebook, Google, TikTok, Whatsapp, Shopee, Zalo, etc.
+      properties:
+        id:
+          description: Source ID
+          format: integer
+          type: string
+          description: >
+            Unique identifier (Integer) of the customer source record.
+        workspace_id:
+            type: integer
+            example: 123
+        name:
+          type: string
+          example: "Facebook"
+        parent_id:
+          type: integer
+          nullable: true
+          example: 50
+        image:
+          type: string
+          nullable: true
+          example: "https://crm.pancake.vn/v2/images/logo.svg"
+        is_removed:
+          type: boolean
+          default: false
+        custom_id:
+          type: string
+          nullable: true
+        link:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - workspace_id
+        - name
+      type: object
