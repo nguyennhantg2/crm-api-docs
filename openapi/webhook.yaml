@@ -113,12 +113,11 @@ components:
     RecordPayload:
       properties:
         id:
-          description: Record ID
-          format: uuid
-          type: string
           description: >
             Record ID. If provided, the record will be updated.
             If omitted, a new record will be created.
+          format: uuid
+          type: string
         name:
           description: Record name
           type: string
@@ -135,8 +134,6 @@ components:
         source:
           type: array
           items:
-            type: integer
-            # format: integer
             $ref: '#/components/schemas/Source/properties/id'
           description: |
             Array of integer IDs referencing the sources this lead came from.
@@ -167,7 +164,7 @@ components:
           format: uuid
           type: string
         created_on:
-          description: The date and time when the record was last created.
+          description: The date and time when the record was created.
           format: date-time
           type: string
         modified_on:
@@ -197,21 +194,20 @@ components:
       type: object
 
     Source:
-      type: string
+      type: object
       description: |
-        The origin/source of the customer (lead source).
+        The source of the customer (lead source).
         This field is shared and consistent across the entire workspace.
         Common values include: Facebook, Google, TikTok, Whatsapp, Shopee, Zalo, etc.
       properties:
         id:
-          description: Source ID
-          format: integer
-          type: string
           description: >
             Unique identifier (Integer) of the customer source record.
+          format: integer
+          type: string
         workspace_id:
-            type: integer
-            example: 123
+          type: integer
+          example: 123
         name:
           type: string
           example: "Facebook"

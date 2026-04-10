@@ -1,7 +1,7 @@
 swagger: '2.0'
 schemes:
   - https
-host: crm.pancake.vn/
+host: crm.pancake.vn
 basePath: /api
 info:
   contact:
@@ -68,11 +68,9 @@ parameters:
 
   RecordFilter:
     in: query
-    in: query
     name: filter
-    schema:
-      type: string
-      example: '{"fields":[]}'
+    type: string
+    example: '{"fields":[]}'
     description: |
       Array object filter:
         {
@@ -99,9 +97,8 @@ parameters:
   RecordViewId:
     in: query
     name: view_id
-    schema:
-      type: string
-      example: all
+    type: string
+    example: all
     description: |
       View identifier.
       Use `all` to return data from all views.
@@ -110,21 +107,19 @@ parameters:
     name: since
     in: query
     required: false
-    schema:
-      type: integer
-      format: int64
-      example: 1672531200
+    type: integer
+    format: int64
+    example: 1672531200
     description: Start time in UNIX timestamp (UTC+0).
 
   Until:
     name: until
     in: query
     required: false
-    schema:
-      type: integer
-      format: int64
-      example: 1672531200
-    description: Start time in UNIX timestamp (UTC+0).
+    type: integer
+    format: int64
+    example: 1672531200
+    description: End time in UNIX timestamp (UTC+0).
 
   RecordId:
     description: The record ID
@@ -141,8 +136,10 @@ parameters:
     example: "g2wAAAADYR5uBgCKPA7SnAFtAAAAJDJmOTQxZWZlLWQ5YTMtNGQ5YS1hZmZlLWUxMjNiMDZiOGE0NGo"
 
 tags:
-  - description: Upsert Record
-    name: Record
+  - description: Manage records in a table
+    name: Records
+  - description: Manage lead sources in a workspace
+    name: Sources
 
 paths:
   '/workspaces/{workspace_id}/{table_name}/records':
@@ -154,8 +151,6 @@ paths:
         - $ref: '#/parameters/TableName'
         - $ref: '#/parameters/RecordFilter'
         - $ref: '#/parameters/RecordViewId'
-        - $ref: '#/parameters/PageSize'
-        - $ref: '#/parameters/PageNumber'
         - $ref: '#/parameters/Cursor'
       responses:
         '200':
@@ -208,9 +203,9 @@ paths:
             $ref: '#/definitions/Record'
       responses:
         '200':
-          description: Record returned
+          description: Record upserted successfully
           schema:
-            title: Records List
+            title: Upsert Response
             type: object
             description: Response object
             properties:
@@ -221,14 +216,14 @@ paths:
                 description: The record object
                 $ref: '#/definitions/Record'
         '403':
-          description: "Forbidden, has not permissions"
+          description: "Forbidden, insufficient permissions"
           schema:
-            title: Response object
+            title: Error Response
             type: object
-            description: Response object
+            description: Error response object
             properties:
               success:
-                description: Indicates whether the upsert operation was successful
+                description: Always false for error responses
                 type: boolean
               message:
                 type: object
@@ -240,7 +235,7 @@ paths:
             description: Response object
             properties:
               success:
-                description: Indicates whether the upsert operation was successful
+                description: Always false for error responses
                 type: boolean
               message:
                 type: string
@@ -277,7 +272,7 @@ paths:
         - Records
   '/workspaces/{workspace_id}/record/{record_id}':
     get:
-      description: Retrieve a record by ID. <aside></aside>
+      description: Retrieve a record by ID.
       operationId: record
       parameters:
         - $ref: '#/parameters/WorkspaceId'
@@ -287,19 +282,19 @@ paths:
         '200':
           description: Record returned
           schema:
-            title: Records List
+            title: Record Response
             type: object
-            description: Record object in record list
+            description: Single record response
             properties:
               success:
-                description: Indicates whether the upsert operation was successful
+                description: Indicates whether the request was successful
                 type: boolean
               data:
-                description: The record response
+                description: The record object
                 $ref: '#/definitions/Record'
         # '404':
         #   description: User not found
-      summary: Record
+      summary: Get record
       tags:
         - Records
 
@@ -318,7 +313,7 @@ paths:
             description: Source object in source list
             properties:
               success:
-                description: Indicates whether the upsert operation was successful
+                description: Indicates whether the request was successful
                 type: boolean
               data:
                 description: List of source objects
@@ -336,12 +331,11 @@ definitions:
     description: 'Creates a new record if it does not exist, otherwise updates the existing record based on a unique key'
     properties:
       id:
-        description: Record ID
-        format: uuid
-        type: string
         description: >
           Record ID. If provided, the record will be updated.
           If omitted, a new record will be created.
+        format: uuid
+        type: string
       name:
         description: Record name
         type: string
@@ -390,7 +384,7 @@ definitions:
         format: uuid
         type: string
       created_on:
-        description: The date and time when the record was last created.
+        description: The date and time when the record was created.
         format: date-time
         type: string
       modified_on:
@@ -420,21 +414,20 @@ definitions:
     type: object
 
   Source:
-    type: string
+    type: object
     description: |
-      The origin/source of the customer (lead source).
+      The source of the customer (lead source).
       This field is shared and consistent across the entire workspace.
       Common values include: Facebook, Google, TikTok, Whatsapp, Shopee, Zalo, etc.
     properties:
       id:
-        description: Source ID
-        format: integer
-        type: string
         description: >
           Unique identifier (Integer) of the customer source record.
+        format: integer
+        type: string
       workspace_id:
-          type: integer
-          example: 123
+        type: integer
+        example: 123
       name:
         type: string
         example: "Facebook"
