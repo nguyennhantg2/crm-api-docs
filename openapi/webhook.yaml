@@ -111,6 +111,7 @@ webhooks:
 components:
   schemas:
     RecordPayload:
+      title: Record Payload
       properties:
         id:
           description: >
@@ -131,6 +132,32 @@ components:
           description: The customer's/lead's date of birth (ISO 8601 format).
           format: date-time
           type: string
+        pancake_tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/PancakeTag/properties/id'
+          description: |
+            Array of pancake tag IDs applied to this record.
+            [Pancake Tag schema](#/schemas/PancakeTag)
+          example: ["104943019063372_11"]
+        pancake_tags_obj:
+          type: array
+          items:
+            $ref: '#/components/schemas/PancakeTag'
+          description: |
+            Array of pancake tag objects applied to this record.
+            [Pancake Tag schema](#/schemas/PancakeTag)
+          example:
+            [
+              {
+                "id": "104943019063372_11",
+                "text": "Quality Check",
+                "description": "Tag used to classify orders requiring quality check before shipping",
+                "color": "#138809",
+                "lighten_color": "rgba(19,136,9,0.4)",
+                "workspace_id": 123
+              }
+            ]
         source:
           type: array
           items:
@@ -238,3 +265,41 @@ components:
         - workspace_id
         - name
       type: object
+
+    PancakeTag:
+      title: Pancake Tag
+      type: object
+      description: |
+        A label/tag used to classify records within a workspace.
+        Tags are shared across the workspace and typically used for segmentation,
+        filtering, and note-keeping on customer records.
+      properties:
+        id:
+          type: string
+          description: Unique identifier of the pancake tag.
+          example: "104943019063372_11"
+        text:
+          type: string
+          description: Display label of the tag.
+          example: "Quality Check"
+        description:
+          type: string
+          nullable: true
+          description: Optional note describing the tag's purpose.
+          example: "Tag used to classify orders requiring quality check before shipping"
+        color:
+          type: string
+          description: Primary color of the tag in HEX format.
+          example: "#138809"
+        lighten_color:
+          type: string
+          description: Background/lightened color of the tag in RGBA format.
+          example: "rgba(19,136,9,0.4)"
+        workspace_id:
+          type: integer
+          description: ID of the workspace the tag belongs to.
+          example: 123
+      required:
+        - id
+        - text
+        - workspace_id

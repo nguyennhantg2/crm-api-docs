@@ -326,6 +326,34 @@ paths:
       tags:
         - Sources
 
+  '/workspaces/{workspace_id}/pancake_tags':
+    get:
+      description: List all the pancake tags in workspace
+      operationId: listPancakeTags
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Pancake tags returned
+          schema:
+            title: Pancake Tag List
+            type: object
+            description: Pancake tag list response
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              data:
+                description: List of pancake tag objects
+                items:
+                  $ref: '#/definitions/PancakeTag'
+                type: array
+        # '404':
+        #   description: User not found
+      summary: List pancake tags
+      tags:
+        - PancakeTags
+
 definitions:
   Record:
     description: 'Creates a new record if it does not exist, otherwise updates the existing record based on a unique key'
@@ -349,6 +377,14 @@ definitions:
         description: The customer's/lead's date of birth (ISO 8601 format).
         format: date-time
         type: string
+      pancake_tags:
+        type: array
+        items:
+          $ref: '#/definitions/PancakeTag/properties/id'
+        description: |
+          Array of pancake tag IDs applied to this record.
+          [Pancake Tag schema](#/schemas/PancakeTag)
+        example: ["104943019063372_11"]
       source:
         type: array
         items:
@@ -458,4 +494,42 @@ definitions:
       - workspace_id
       - name
     type: object
+
+  PancakeTag:
+    title: Pancake Tag
+    type: object
+    description: |
+      A label/tag used to classify records within a workspace.
+      Tags are shared across the workspace and typically used for segmentation,
+      filtering, and note-keeping on customer records.
+    properties:
+      id:
+        type: string
+        description: Unique identifier of the pancake tag.
+        example: "104943019063372_11"
+      text:
+        type: string
+        description: Display label of the tag.
+        example: "Quality Check"
+      description:
+        type: string
+        nullable: true
+        description: Optional note describing the tag's purpose.
+        example: "Tag used to classify orders requiring quality check before shipping"
+      color:
+        type: string
+        description: Primary color of the tag in HEX format.
+        example: "#138809"
+      lighten_color:
+        type: string
+        description: Background/lightened color of the tag in RGBA format.
+        example: "rgba(19,136,9,0.4)"
+      workspace_id:
+        type: integer
+        description: ID of the workspace the tag belongs to.
+        example: 123
+    required:
+      - id
+      - text
+      - workspace_id
 x-explorer-enabled: false
