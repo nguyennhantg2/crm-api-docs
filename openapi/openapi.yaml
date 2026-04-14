@@ -326,7 +326,7 @@ paths:
       tags:
         - Sources
 
-  '/workspaces/{workspace_id}/pancake_tags':
+  '/workspaces/{workspace_id}/pages/pancake_tags':
     get:
       description: List all the pancake tags in workspace
       operationId: listPancakeTags
