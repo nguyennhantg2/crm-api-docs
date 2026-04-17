@@ -57,14 +57,30 @@ parameters:
     name: table_name
     required: true
     type: string
-    description: The table of records.
+    enum:
+      - lead
+      - account
+      - contact
+    description: |
+      The table of records. Accepts one of:
+      - `lead`
+      - `account`
+      - `contact`
 
   TableNameQuery:
     in: query
     name: table_name
     required: true
     type: string
-    description: The table of records.
+    enum:
+      - lead
+      - account
+      - contact
+    description: |
+      The table of records. Accepts one of:
+      - `lead`
+      - `account`
+      - `contact`
 
   RecordFilter:
     in: query
@@ -135,16 +151,26 @@ parameters:
     type: string
     example: "g2wAAAADYR5uBgCKPA7SnAFtAAAAJDJmOTQxZWZlLWQ5YTMtNGQ5YS1hZmZlLWUxMjNiMDZiOGE0NGo"
 
+  TicketId:
+    description: The ticket ID (UUID).
+    in: path
+    name: ticket_id
+    required: true
+    type: string
+    format: uuid
+
 tags:
   - description: Manage records in a table
     name: Records
+  - description: Manage tickets (tasks, issues, work items) in a workspace
+    name: Tickets
   - description: Manage lead sources in a workspace
     name: Sources
 
 paths:
   '/workspaces/{workspace_id}/{table_name}/records':
     get:
-      description: List all the records in table
+      description: List all the records in table. Only supports `lead`, `account`, `contact`.
       operationId: records
       parameters:
         - $ref: '#/parameters/WorkspaceId'
@@ -190,7 +216,9 @@ paths:
       tags:
         - Records
     post:
-      description: Insert or update a record in current table. <aside>Provide the record ID in the parameters to update an existing record. Otherwise, a new record will be created.</aside>
+      description: |
+        Insert or update a record in current table. Only supports `lead`, `account`, `contact`.
+        <aside>Provide the record ID in the parameters to update an existing record. Otherwise, a new record will be created.</aside>
       operationId: recordCreate
       parameters:
         - $ref: '#/parameters/WorkspaceId'
@@ -248,7 +276,7 @@ paths:
         - Records
     delete:
       summary: Delete records
-      description: Remove multiple records from a table by record IDs
+      description: Remove multiple records from a table by record IDs. Only supports `lead`, `account`, `contact`.
       operationId: deleteRecords
       parameters:
         - $ref: '#/parameters/WorkspaceId'
@@ -272,7 +300,7 @@ paths:
         - Records
   '/workspaces/{workspace_id}/record/{record_id}':
     get:
-      description: Retrieve a record by ID.
+      description: Retrieve a record by ID. Only supports `lead`, `account`, `contact`.
       operationId: record
       parameters:
         - $ref: '#/parameters/WorkspaceId'
@@ -297,6 +325,196 @@ paths:
       summary: Get record
       tags:
         - Records
+
+  '/workspaces/{workspace_id}/tickets':
+    get:
+      description: List all the tickets in a workspace.
+      operationId: listTickets
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/Cursor'
+      responses:
+        '200':
+          description: Tickets returned
+          schema:
+            title: Tickets List
+            type: object
+            description: Tickets list response
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              entries:
+                description: List of ticket objects
+                items:
+                  $ref: '#/definitions/Ticket'
+                type: array
+      summary: List tickets
+      tags:
+        - Tickets
+    post:
+      description: Create a new ticket in the workspace.
+      operationId: createTicket
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - description: Ticket body
+          in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/Ticket'
+      responses:
+        '200':
+          description: Ticket created successfully
+          schema:
+            title: Ticket Create Response
+            type: object
+            description: Response object after creating a ticket
+            properties:
+              success:
+                description: Indicates whether the create operation was successful
+                type: boolean
+              data:
+                description: The created ticket object
+                $ref: '#/definitions/Ticket'
+        '403':
+          description: "Forbidden, insufficient permissions"
+          schema:
+            title: Error Response
+            type: object
+            description: Error response object
+            properties:
+              success:
+                description: Always false for error responses
+                type: boolean
+              message:
+                type: object
+        '422':
+          description: "Invalid ticket payload"
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+      summary: Create ticket
+      tags:
+        - Tickets
+
+  '/workspaces/{workspace_id}/tickets/{ticket_id}':
+    get:
+      description: Retrieve a ticket by ID.
+      operationId: getTicket
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/TicketId'
+      responses:
+        '200':
+          description: Ticket returned
+          schema:
+            title: Ticket Response
+            type: object
+            description: Single ticket response
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              data:
+                description: The ticket object
+                $ref: '#/definitions/Ticket'
+        '404':
+          description: Ticket not found
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+      summary: Get ticket
+      tags:
+        - Tickets
+    put:
+      description: Update an existing ticket by ID. Only provided fields will be updated.
+      operationId: updateTicket
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/TicketId'
+        - description: Ticket fields to update
+          in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/Ticket'
+      responses:
+        '200':
+          description: Ticket updated successfully
+          schema:
+            title: Ticket Update Response
+            type: object
+            description: Response object after updating a ticket
+            properties:
+              success:
+                description: Indicates whether the update operation was successful
+                type: boolean
+              data:
+                description: The updated ticket object
+                $ref: '#/definitions/Ticket'
+        '403':
+          description: "Forbidden, insufficient permissions"
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: object
+        '404':
+          description: Ticket not found
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+      summary: Update ticket
+      tags:
+        - Tickets
+    delete:
+      description: Delete a ticket by ID (soft-delete).
+      operationId: deleteTicket
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/TicketId'
+      responses:
+        '200':
+          description: Ticket deleted successfully
+          schema:
+            title: Ticket Delete Response
+            type: object
+            properties:
+              success:
+                type: boolean
+                description: Indicates whether the delete operation was successful
+        '404':
+          description: Ticket not found
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+      summary: Delete ticket
+      tags:
+        - Tickets
 
   '/workspaces/{workspace_id}/sources':
     get:
@@ -448,6 +666,153 @@ definitions:
     required:
       - name
     type: object
+
+  Ticket:
+    title: Ticket
+    type: object
+    description: |
+      A ticket represents a task, issue, or work item associated with a workspace.
+      Tickets are used to track work progress, assignments, and priorities across the team.
+    properties:
+      id:
+        description: Unique identifier (UUID) of the ticket.
+        format: uuid
+        type: string
+        example: "b20d47ba-cc24-421c-92f6-f59da03b0ce4"
+      workspace_id:
+        description: ID of the workspace this ticket belongs to.
+        type: integer
+        example: 123
+      display_id:
+        description: Human-readable sequential ID of the ticket within the workspace.
+        type: integer
+        example: 1
+      ticket_id:
+        description: Custom ticket identifier (zero-padded sequential code).
+        type: string
+        nullable: true
+        example: "00001"
+      title:
+        description: Title or short summary of the ticket.
+        type: string
+        example: "Unable to update member information"
+      description:
+        description: Detailed description of the ticket.
+        type: string
+        nullable: true
+      note:
+        description: Additional notes or comments about the ticket.
+        type: string
+        nullable: true
+      category:
+        description: Category classification of the ticket.
+        type: string
+        nullable: true
+        example: "order"
+      status:
+        description: Current status of the ticket.
+        type: string
+        default: "new"
+        example: "in_progress"
+        enum:
+          - new
+          - in_progress
+          - completed
+          - cancelled
+      priority:
+        description: Priority level of the ticket.
+        type: string
+        nullable: true
+        example: "medium"
+        enum:
+          - low
+          - medium
+          - high
+          - urgent
+      due_date:
+        description: The date and time when the ticket is due.
+        type: string
+        format: date-time
+        nullable: true
+        example: "2026-02-07T09:37:25"
+      completed_at:
+        description: The date and time when the ticket was completed.
+        type: string
+        format: date-time
+        nullable: true
+      assignee_ids:
+        description: List of user IDs assigned to this ticket.
+        type: array
+        items:
+          type: string
+          format: uuid
+        example:
+          - "4db4c09e-5fb6-47e7-a4d9-3ad49110155d"
+          - "d1e93867-cc3c-4efe-8280-7b34ab80ba12"
+      related_owner:
+        description: List of user IDs related as owners of this ticket.
+        type: array
+        nullable: true
+        items:
+          type: string
+          format: uuid
+      creator_id:
+        description: ID of the user who created the ticket.
+        type: string
+        format: uuid
+        example: "0ff972fd-19a6-487e-b7ce-2398cdc8b875"
+      extra_info:
+        description: Dynamic custom fields defined by users.
+        type: object
+        additionalProperties: true
+        nullable: true
+        example:
+          is_sample_data: true
+      kanban_order:
+        description: Ordering key used to sort tickets on a kanban board.
+        type: string
+        nullable: true
+        example: "62"
+      source:
+        type: array
+        items:
+          type: integer
+          $ref: '#/definitions/Source/properties/id'
+        description: |
+          Array of integer IDs referencing the sources this lead came from.
+          [Source schema](#/schemas/Source)
+        example: ["-11"]
+      record_relations:
+        description: |
+          List of related record associations for this ticket
+          (e.g. linked tasks, orders, deals, records or other tickets).
+        type: array
+        items:
+          type: object
+      contact_id:
+        description: ID of the related contact/record this ticket is linked to.
+        type: string
+        format: uuid
+        nullable: true
+        example: "0c1649c6-2297-4835-9a68-8fdd1d348d8b"
+      is_removed:
+        description: Whether the ticket has been soft-deleted.
+        type: boolean
+        default: false
+        example: false
+      inserted_at:
+        description: The date and time when the ticket was created.
+        type: string
+        format: date-time
+        example: "2026-02-04T10:14:32.683430"
+      updated_at:
+        description: The date and time when the ticket was last updated.
+        type: string
+        format: date-time
+        example: "2026-02-04T10:14:32.683430"
+    required:
+      - workspace_id
+      - title
 
   Source:
     type: object
