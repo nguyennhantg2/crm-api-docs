@@ -90,7 +90,7 @@ webhooks:
     post:
       summary: Table data
       description: |
-        Pancake CRM sends an HTTP POST request to your registered endpoint when a record is changed.
+        Pancake CRM sends an HTTP POST request to your registered endpoint when a record is changed. Only supports `lead`, `account`, `contact` tables.
 
         **Note:** Your endpoint must return HTTP `200` to acknowledge the webhook.
 

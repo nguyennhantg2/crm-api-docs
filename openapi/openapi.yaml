@@ -166,6 +166,8 @@ tags:
     name: Tickets
   - description: Manage lead sources in a workspace
     name: Sources
+  - description: Manage products in a workspace
+    name: Products
 
 paths:
   '/workspaces/{workspace_id}/{table_name}/records':
@@ -325,6 +327,153 @@ paths:
       summary: Get record
       tags:
         - Records
+
+  '/workspaces/{workspace_id}/products':
+    get:
+      description: List all the products in a workspace.
+      operationId: listProducts
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - name: page
+          in: query
+          type: integer
+          default: 1
+          description: Page number for pagination
+        - name: page_size
+          in: query
+          type: integer
+          default: 30
+          description: Number of products per page
+      responses:
+        '200':
+          description: Products returned
+          schema:
+            title: Products List
+            type: object
+            description: Products list response
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              data:
+                description: List of product objects
+                items:
+                  $ref: '#/definitions/Product'
+                type: array
+      summary: List products
+      tags:
+        - Products
+    post:
+      description: Create a new product in the workspace.
+      operationId: createProduct
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - description: Product body
+          in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/Product'
+      responses:
+        '200':
+          description: Product created successfully
+          schema:
+            title: Product Create Response
+            type: object
+            description: Response object after creating a product
+            properties:
+              success:
+                description: Indicates whether the create operation was successful
+                type: boolean
+              data:
+                description: The created product object
+                $ref: '#/definitions/Product'
+        '403':
+          description: "Forbidden, insufficient permissions"
+          schema:
+            title: Error Response
+            type: object
+            description: Error response object
+            properties:
+              success:
+                description: Always false for error responses
+                type: boolean
+              message:
+                type: object
+        '422':
+          description: "Invalid product payload"
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+      summary: Create product
+      tags:
+        - Products
+
+  '/workspaces/{workspace_id}/products/{product_id}':
+    put:
+      description: Update an existing product by ID. Only provided fields will be updated.
+      operationId: updateProduct
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - description: The product ID
+          in: path
+          name: product_id
+          required: true
+          type: string
+          format: uuid
+        - description: Product fields to update
+          in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Product'
+            required:
+              - data
+      responses:
+        '200':
+          description: Product updated successfully
+          schema:
+            title: Product Update Response
+            type: object
+            description: Response object after updating a product
+            properties:
+              success:
+                description: Indicates whether the update operation was successful
+                type: boolean
+              data:
+                description: The updated product object
+                $ref: '#/definitions/Product'
+        '403':
+          description: "Forbidden, insufficient permissions"
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: object
+        '404':
+          description: Product not found
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+      summary: Update product
+      tags:
+        - Products
 
   '/workspaces/{workspace_id}/tickets':
     get:
@@ -487,7 +636,7 @@ paths:
       tags:
         - Tickets
     delete:
-      description: Delete a ticket by ID (soft-delete).
+      description: Delete a ticket by ID.
       operationId: deleteTicket
       parameters:
         - $ref: '#/parameters/WorkspaceId'
@@ -667,6 +816,72 @@ definitions:
       - name
     type: object
 
+  Product:
+    description: 'A product in the workspace'
+    type: object
+    properties:
+      id:
+        description: Product ID (UUID)
+        format: uuid
+        type: string
+      name:
+        description: Product name
+        type: string
+      type:
+        description: Product type/category
+        type: string
+      display_id:
+        description: Human-readable sequential ID of the product within the workspace
+        type: integer
+      custom_id:
+        description: Custom product identifier
+        type: string
+        nullable: true
+      category_ids:
+        description: Array of category IDs this product belongs to
+        type: array
+        items:
+          type: string
+          format: uuid
+      images:
+        description: Array of product image URLs
+        type: array
+        items:
+          type: string
+        example:
+          - "https://content.pancake.vn/2-25/s100x100/2025/9/22/cc3819d7a9df512eba67f1da7ab5eb698c6d951c.jpg"
+      description:
+        description: Product description
+        type: string
+        nullable: true
+      import_price:
+        description: Product import/cost price in cents
+        type: integer
+        default: 0
+      retail_price:
+        description: Product retail/selling price in cents
+        type: integer
+        default: 0
+      total_quantity:
+        description: Total quantity of the product in stock
+        type: integer
+        default: 0
+      remain_quantity:
+        description: Remaining quantity available for sale
+        type: integer
+        default: 0
+      duration:
+        description: Product duration/validity period in days
+        type: integer
+        nullable: true
+      creator_id:
+        description: ID of the user who created the product
+        format: uuid
+        type: string
+    required:
+      - name
+    type: object
+
   Ticket:
     title: Ticket
     type: object
@@ -679,10 +894,6 @@ definitions:
         format: uuid
         type: string
         example: "b20d47ba-cc24-421c-92f6-f59da03b0ce4"
-      workspace_id:
-        description: ID of the workspace this ticket belongs to.
-        type: integer
-        example: 123
       display_id:
         description: Human-readable sequential ID of the ticket within the workspace.
         type: integer
@@ -811,7 +1022,6 @@ definitions:
         format: date-time
         example: "2026-02-04T10:14:32.683430"
     required:
-      - workspace_id
       - title
 
   Source:
@@ -826,9 +1036,6 @@ definitions:
           Unique identifier (Integer) of the customer source record.
         format: integer
         type: string
-      workspace_id:
-        type: integer
-        example: 123
       name:
         type: string
         example: "Facebook"
@@ -849,14 +1056,7 @@ definitions:
       link:
         type: string
         nullable: true
-      created_at:
-        type: string
-        format: date-time
-      updated_at:
-        type: string
-        format: date-time
     required:
-      - workspace_id
       - name
     type: object
 
@@ -889,12 +1089,7 @@ definitions:
         type: string
         description: Background/lightened color of the tag in RGBA format.
         example: "rgba(19,136,9,0.4)"
-      workspace_id:
-        type: integer
-        description: ID of the workspace the tag belongs to.
-        example: 123
     required:
       - id
       - text
-      - workspace_id
 x-explorer-enabled: false
