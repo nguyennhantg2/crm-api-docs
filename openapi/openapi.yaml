@@ -159,11 +159,37 @@ parameters:
     type: string
     format: uuid
 
+  OrderId:
+    description: The order ID (UUID).
+    in: path
+    name: id
+    required: true
+    type: string
+    format: uuid
+
+  Page:
+    description: Page number for pagination (1-based).
+    in: query
+    name: page
+    required: false
+    type: integer
+    default: 1
+
+  PageSize:
+    description: Number of items returned per page.
+    in: query
+    name: page_size
+    required: false
+    type: integer
+    default: 30
+
 tags:
   - description: Manage records in a table
     name: Records
   - description: Manage tickets (tasks, issues, work items) in a workspace
     name: Tickets
+  - description: Manage orders (sales orders and their line items) in a workspace
+    name: Orders
   - description: Manage lead sources in a workspace
     name: Sources
   - description: Manage products in a workspace
@@ -474,6 +500,437 @@ paths:
   #     summary: Update product
   #     tags:
   #       - Products
+
+  '/workspaces/{workspace_id}/orders':
+    get:
+      description: |
+        List orders in a workspace, most recent first.
+
+        Results are paginated using `page` / `page_size` (offset-based) and can be narrowed
+        with `search` (matches order code `OD...`, custom ID, or billing phone number) and
+        a structured `filter`. Only orders the current API key is allowed to see are returned.
+      operationId: listOrders
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/Page'
+        - $ref: '#/parameters/PageSize'
+        - name: search
+          in: query
+          type: string
+          required: false
+          description: |
+            Free-text search. Matches the order code (e.g. `OD00012` or `12`),
+            the custom ID, or the billing phone number.
+          example: "OD00012"
+        - name: filter
+          in: query
+          type: string
+          required: false
+          example: '{"fields":[]}'
+          description: |
+            JSON-encoded structured filter. Shape:
+
+                {
+                  "fields": [
+                    { "field_name": "status", "value": ["new"], "is_filter_exclude": false }
+                  ]
+                }
+
+            Supported `field_name` values: `status`, `source_ids`, `contact`, `product`,
+            `assigning_seller`, `created_by`, `cod`, `total_discount`, `created_on`, `modified_on`.
+        - name: deal_id
+          in: query
+          type: string
+          format: uuid
+          required: false
+          description: Return only orders linked to this deal (record relation of type `deal`).
+      responses:
+        '200':
+          description: Orders returned
+          schema:
+            title: Orders List
+            type: object
+            description: Paginated orders list response
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              fallback:
+                type: string
+                example: "with_data"
+              data:
+                type: object
+                description: Paginated payload
+                properties:
+                  entries:
+                    description: List of order objects
+                    type: array
+                    items:
+                      $ref: '#/definitions/Order'
+                  page_number:
+                    type: integer
+                    example: 1
+                  page_size:
+                    type: integer
+                    example: 30
+                  total_entries:
+                    type: integer
+                    example: 128
+                  total_pages:
+                    type: integer
+                    example: 5
+      summary: List orders
+      tags:
+        - Orders
+    post:
+      description: |
+        Create a new order in the workspace.
+
+        The order payload must be wrapped in an `order` object. An order must be linked to a
+        contact: provide either an existing `contact_id`, or a `contact` object (with at least
+        a `name`, and usually a `phone_number`) which will be upserted into the `contact` table
+        and linked automatically. Order line items go in `order.items`; monetary totals
+        (`total_quantity`, `total_discount`, `cod`, `prepaid`, …) are computed server-side from
+        the items and payment fields.
+      operationId: createOrder
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - description: Order body
+          in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - order
+            properties:
+              order: &OrderInputSchema
+                title: Order Input
+                type: object
+                description: |
+                  Writable order payload (sent as the `order` field of the request body) used for both
+                  create and update. Computed fields (`total_quantity`, `total_discount`, `cod`, `prepaid`,
+                  `display_id`, timestamps) are derived server-side and should not be sent.
+                properties:
+                  contact:
+                    description: |
+                      Contact to link to the order. Provide an existing contact via `id`, or new contact
+                      details (`name`, `phone_number`, `email`) to upsert and link automatically.
+                      An order must resolve to a contact, so either `contact` or `contact_id` is required.
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+                        example: "Nguyễn Văn A"
+                      phone_number:
+                        type: string
+                        example: "0972273341"
+                      email:
+                        type: string
+                  contact_id:
+                    description: ID of an existing contact record to link (alternative to `contact`).
+                    type: string
+                    format: uuid
+                  account:
+                    description: Account to link to the order (same upsert behaviour as `contact`).
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                      name:
+                        type: string
+                  account_id:
+                    description: ID of an existing account record to link.
+                    type: string
+                    format: uuid
+                  deal_id:
+                    description: ID of a deal to link this order to (creates a `deal` record relation).
+                    type: string
+                    format: uuid
+                  calendar_id:
+                    description: ID of a calendar event to link this order to.
+                    type: string
+                    format: uuid
+                  status:
+                    description: Order status. Defaults to `new` when omitted on create.
+                    type: string
+                    example: "new"
+                  code:
+                    description: Custom order code. Stored as `custom_id` (alias of `custom_id`).
+                    type: string
+                    example: "OD00012"
+                  custom_id:
+                    description: Custom order code. Use this or `code`.
+                    type: string
+                  bill_phone_number:
+                    description: Billing phone number. Defaults to the linked contact's phone number.
+                    type: string
+                  assigning_seller_id:
+                    description: ID of the seller assigned to the order.
+                    type: string
+                    format: uuid
+                  related_owner:
+                    description: Additional owner user IDs.
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                  note:
+                    description: Free-text note.
+                    type: string
+                  note_image:
+                    description: Image URLs for the note.
+                    type: array
+                    items:
+                      type: string
+                  discount:
+                    description: Order-level discount amount.
+                    type: integer
+                  transfer_money:
+                    description: Amount paid by bank transfer.
+                    type: integer
+                  surcharge:
+                    description: Surcharge added to the order.
+                    type: integer
+                  deposit:
+                    description: Deposit amount paid up front.
+                    type: integer
+                  cash:
+                    description: Cash amount paid.
+                    type: integer
+                  source_ids:
+                    description: Source IDs to attribute the order to.
+                    type: array
+                    items:
+                      type: string
+                  is_removed:
+                    description: Set to `true` to soft-delete the order.
+                    type: boolean
+                  extra_infor:
+                    description: Dynamic custom fields.
+                    type: object
+                    additionalProperties: true
+                  items:
+                    description: Line items for the order.
+                    type: array
+                    items:
+                      title: Order Item Input
+                      type: object
+                      description: A line item in a create/update order request.
+                      properties:
+                        item_id:
+                          description: |
+                            Existing order-item ID (UUID). Provide on update to modify an existing line item;
+                            omit to add a new one. Existing items not present in the request are removed.
+                          type: string
+                          format: uuid
+                        product_id:
+                          description: Product ID for the line item. `id` is accepted as an alias.
+                          type: string
+                          format: uuid
+                        id:
+                          description: Alias for `product_id`.
+                          type: string
+                          format: uuid
+                        quantity:
+                          description: Quantity ordered.
+                          type: integer
+                          example: 2
+                        price:
+                          description: Unit price.
+                          type: integer
+                          example: 75000
+                        total:
+                          description: Line total. Defaults to `price * quantity` when omitted or 0.
+                          type: integer
+                        discount:
+                          description: Per-unit discount.
+                          type: integer
+                        name:
+                          description: Product/variation display name (snapshotted into `variation_info`).
+                          type: string
+                        import_price:
+                          description: Import/cost price (snapshotted into `variation_info`).
+                          type: integer
+                        images:
+                          description: Product image URLs (snapshotted into `variation_info`).
+                          type: array
+                          items:
+                            type: string
+                        category_ids:
+                          description: Category IDs (snapshotted into `variation_info`).
+                          type: array
+                          items:
+                            type: integer
+                        type:
+                          description: Item type (e.g. product vs service).
+                          type: string
+                        service_info:
+                          description: |
+                            Service metadata. When present, the line's amount is treated as already included in
+                            its parent item and is not added to the order totals again.
+                          type: object
+                          additionalProperties: true
+                        start_time:
+                          description: Service start time.
+                          type: string
+                          format: date-time
+                        end_time:
+                          description: Service end time.
+                          type: string
+                          format: date-time
+                        duration:
+                          description: Service duration in days.
+                          type: integer
+                      required:
+                        - quantity
+                        - price
+      responses:
+        '200':
+          description: Order created successfully
+          schema:
+            title: Order Create Response
+            type: object
+            description: Response object after creating an order
+            properties:
+              success:
+                description: Indicates whether the create operation was successful
+                type: boolean
+              fallback:
+                type: string
+                example: "with_data"
+              data:
+                description: The created order object
+                $ref: '#/definitions/Order'
+        '403':
+          description: "Forbidden, insufficient permissions"
+          schema:
+            title: Error Response
+            type: object
+            description: Error response object
+            properties:
+              success:
+                description: Always false for error responses
+                type: boolean
+              message:
+                type: object
+        '422':
+          description: "Invalid order payload (e.g. missing contact)"
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+      summary: Create order
+      tags:
+        - Orders
+
+  '/workspaces/{workspace_id}/orders/{id}':
+    get:
+      description: Retrieve a single order by ID, including its line items and related records.
+      operationId: getOrder
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/OrderId'
+      responses:
+        '200':
+          description: Order returned
+          schema:
+            title: Order Response
+            type: object
+            description: Single order response
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              fallback:
+                type: string
+                example: "with_data"
+              data:
+                description: The order object
+                $ref: '#/definitions/Order'
+        '404':
+          description: Order not found
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+      summary: Get order
+      tags:
+        - Orders
+    put:
+      description: |
+        Update an existing order by ID. The payload must be wrapped in an `order` object and
+        follows the same shape as create. Only provided fields are changed.
+
+        Line items in `order.items` are reconciled: items with an existing `item_id` are
+        updated, items without one are inserted, and existing items omitted from the list are
+        removed. To soft-delete an order, send `order.is_removed = true`.
+      operationId: updateOrder
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/OrderId'
+        - description: Order fields to update
+          in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - order
+            properties:
+              order: *OrderInputSchema
+      responses:
+        '200':
+          description: Order updated successfully
+          schema:
+            title: Order Update Response
+            type: object
+            description: Response object after updating an order
+            properties:
+              success:
+                description: Indicates whether the update operation was successful
+                type: boolean
+              fallback:
+                type: string
+                example: "with_data"
+              data:
+                description: The updated order object
+                $ref: '#/definitions/Order'
+        '403':
+          description: "Forbidden, insufficient permissions"
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: object
+        '404':
+          description: Order not found
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+      summary: Update order
+      tags:
+        - Orders
 
   '/workspaces/{workspace_id}/tickets':
     get:
@@ -1017,6 +1474,265 @@ definitions:
         example: "2026-02-04T10:14:32.683430"
     required:
       - title
+
+  Order:
+    title: Order
+    type: object
+    description: |
+      A sales order belonging to a workspace. An order groups line items (`items`), payment
+      information, and links to related records (contact, account, deal, calendar) through
+      `record_relations`. Monetary amounts are integers in the workspace currency's smallest
+      practical unit (for VND this is the dong, with no decimals).
+    properties:
+      id:
+        description: Unique identifier (UUID) of the order.
+        format: uuid
+        type: string
+        example: "b20d47ba-cc24-421c-92f6-f59da03b0ce4"
+      workspace_id:
+        description: ID of the workspace the order belongs to.
+        type: integer
+        example: 2
+      display_id:
+        description: Human-readable sequential ID of the order within the workspace (rendered as `OD{display_id}`).
+        type: integer
+        example: 12
+      custom_id:
+        description: Custom order code/identifier.
+        type: string
+        nullable: true
+        example: "OD00012"
+      status:
+        description: Current status of the order.
+        type: string
+        default: "new"
+        example: "new"
+      bill_phone_number:
+        description: Billing phone number (defaults to the linked contact's phone number).
+        type: string
+        nullable: true
+        example: "0972273341"
+      bill_full_name:
+        description: Billing full name.
+        type: string
+        nullable: true
+      bill_email:
+        description: Billing email (defaults to the linked contact's email).
+        type: string
+        nullable: true
+      note:
+        description: Free-text note on the order.
+        type: string
+        nullable: true
+      note_image:
+        description: List of image URLs attached to the note.
+        type: array
+        nullable: true
+        items:
+          type: string
+      assigning_seller_id:
+        description: ID of the user (seller) assigned to handle this order.
+        type: string
+        format: uuid
+        nullable: true
+        example: "4db4c09e-5fb6-47e7-a4d9-3ad49110155d"
+      creator_id:
+        description: ID of the user who created the order.
+        type: string
+        format: uuid
+        nullable: true
+      related_owner:
+        description: List of additional user IDs related as owners of this order.
+        type: array
+        nullable: true
+        items:
+          type: string
+          format: uuid
+      total_quantity:
+        description: Total quantity across all line items (computed server-side).
+        type: integer
+        example: 3
+      discount:
+        description: Order-level discount amount.
+        type: integer
+        example: 0
+      total_discount:
+        description: Sum of line-item discounts (computed server-side).
+        type: integer
+        example: 0
+      transfer_money:
+        description: Amount paid by bank transfer.
+        type: integer
+        example: 0
+      surcharge:
+        description: Additional surcharge added to the order total.
+        type: integer
+        example: 0
+      cod:
+        description: |
+          Cash-on-delivery amount due, computed as
+          `sum(item totals) + surcharge - discount - prepaid`.
+        type: integer
+        example: 150000
+      prepaid:
+        description: Total amount already paid (`deposit + cash + transfer_money`).
+        type: integer
+        example: 0
+      deposit:
+        description: Deposit amount paid up front.
+        type: integer
+        example: 0
+      cash:
+        description: |
+          Cash portion of the prepaid amount (`prepaid - transfer_money - deposit`).
+          Computed virtual field, present in responses only.
+        type: integer
+        example: 0
+      source_ids:
+        description: Array of source IDs the order is attributed to.
+        type: array
+        nullable: true
+        items:
+          type: string
+        example: ["-11"]
+      is_removed:
+        description: Whether the order has been soft-deleted.
+        type: boolean
+        default: false
+        example: false
+      extra_infor:
+        description: Dynamic custom fields. Also stores derived helpers such as `item_product_ids` and `item_prices`.
+        type: object
+        additionalProperties: true
+        nullable: true
+      items:
+        description: Line items belonging to this order.
+        type: array
+        items:
+          $ref: '#/definitions/OrderItem'
+      record_relations:
+        description: |
+          Records linked to this order (e.g. the related `contact`, `account`, `deal`).
+          Each relation embeds the resolved `record` object when available.
+        type: array
+        items:
+          type: object
+          properties:
+            table_name:
+              type: string
+              example: "contact"
+            type:
+              type: string
+              example: "order"
+            record_id:
+              type: string
+            related_id:
+              type: string
+            record:
+              type: object
+              additionalProperties: true
+              nullable: true
+      rating:
+        description: Latest rating associated with the order, if any.
+        type: object
+        nullable: true
+      inserted_at:
+        description: The date and time when the order was created.
+        type: string
+        format: date-time
+        example: "2026-02-04T10:14:32.683430"
+      updated_at:
+        description: The date and time when the order was last updated.
+        type: string
+        format: date-time
+        example: "2026-02-04T10:14:32.683430"
+
+  OrderItem:
+    title: Order Item
+    type: object
+    description: A single line item within an order.
+    properties:
+      id:
+        description: Unique identifier (UUID) of the line item.
+        type: string
+        format: uuid
+      order_id:
+        description: ID of the order this item belongs to.
+        type: string
+        format: uuid
+      product_id:
+        description: ID of the product for this line item.
+        type: string
+        format: uuid
+        nullable: true
+      quantity:
+        description: Quantity ordered.
+        type: integer
+        example: 2
+      price:
+        description: Unit price.
+        type: integer
+        example: 75000
+      discount:
+        description: Per-unit discount.
+        type: integer
+        example: 0
+      total_discount:
+        description: Total discount applied to this line (`subtotal - total_price`).
+        type: integer
+        example: 0
+      total_price:
+        description: Final total for this line after discount.
+        type: integer
+        example: 150000
+      variation_info:
+        description: Snapshot of the product/variation at the time of ordering.
+        type: object
+        nullable: true
+        properties:
+          name:
+            type: string
+            example: "Áo thun nam"
+          retail_price:
+            type: integer
+          import_price:
+            type: integer
+          images:
+            type: array
+            items:
+              type: string
+          product_id:
+            type: string
+            format: uuid
+          category_ids:
+            type: array
+            items:
+              type: integer
+          type:
+            type: string
+          start_time:
+            type: string
+            format: date-time
+            nullable: true
+          end_time:
+            type: string
+            format: date-time
+            nullable: true
+          duration:
+            type: integer
+            nullable: true
+          service_info:
+            type: object
+            additionalProperties: true
+            nullable: true
+      workspace_id:
+        type: integer
+      inserted_at:
+        type: string
+        format: date-time
+      updated_at:
+        type: string
+        format: date-time
 
   Source:
     type: object

@@ -1,6 +1,6 @@
 # Pancake CRM API Documentation
 
-RESTful API documentation for Pancake CRM, including record management, product management, sources, pancake tags, and webhook events.
+RESTful API documentation for Pancake CRM, including record management, order management, product management, sources, pancake tags, and webhook events.
 
 - **Version**: 2.0.0
 - **Base URL**: `https://crm.pancake.vn/api`
@@ -9,6 +9,7 @@ RESTful API documentation for Pancake CRM, including record management, product 
 ## Key Features
 
 - Record management (list, get, upsert, delete) — supports lead, account, and contact tables
+- Order management (list, get, create, update) — sales orders with line items
 - Product management (list, create, update)
 - Customer sources
 - Pancake tags (record classification labels)
@@ -19,6 +20,12 @@ RESTful API documentation for Pancake CRM, including record management, product 
 **Records**
 - `GET/POST/DELETE /workspaces/{workspace_id}/{table_name}/records` — Record CRUD (lead, account, contact)
 - `GET /workspaces/{workspace_id}/record/{record_id}` — Get a single record
+
+**Orders**
+- `GET /workspaces/{workspace_id}/orders` — List orders (paginated)
+- `POST /workspaces/{workspace_id}/orders` — Create order
+- `GET /workspaces/{workspace_id}/orders/{id}` — Get a single order
+- `PUT /workspaces/{workspace_id}/orders/{id}` — Update order
 
 **Products**
 - `GET /workspaces/{workspace_id}/products` — List products
