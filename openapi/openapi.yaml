@@ -86,18 +86,51 @@ parameters:
     in: query
     name: filter
     type: string
-    example: '{"fields":[]}'
+    example: '{"search_all":"","fields":[]}'
     description: |
-      Array object filter:
-        {
-          "fields": [
-            {
-              "field_name": "phone_number",
-              "type": "$having_value",
-              "is_filter_exclude": false
-            }
-          ]
-        }
+      JSON-encoded filter object. Shape:
+
+      ```json
+      {
+        "search_all": "0972273341",
+        "is_group": false,
+        "fields": [
+          {
+            "field_name": "phone_number",
+            "type": "$having_value",
+            "value": null,
+            "is_filter_exclude": false
+          }
+        ]
+      }
+      ```
+
+      Top-level properties:
+      - `search_all` (string, optional): Global full-text search across all text, phone
+        and number fields of the record (e.g. `name`, `phone_number`, `email`). Use this
+        for a "search box" style lookup. When the value contains phone-like digits, it is
+        also matched against phone fields.
+      - `is_group` (boolean, optional): When `true`, the conditions in `fields` are
+        combined with **OR** logic. When `false` or omitted, they are combined with
+        **AND** (default).
+      - `fields` (array, optional): List of field conditions. Each item contains:
+        - `field_name` (string): Name of the field to filter on (e.g. `phone_number`,
+          `name`, `email`).
+        - `type` (string): Filter operator. Supported values:
+          - `$having_value` — field has a value (not empty)
+          - `$having_no_value` — field is empty
+          - `$enter_value` — field equals / contains `value`
+          - `$select_multi` — field matches any value in the `value` array
+          - `$date_time` — field is within the `[from, to]` range given in `value`
+          - `$greater_than`, `$less_than`, `$greater_than_equal`, `$less_than_equal` —
+            numeric comparisons (pass the number as a string in `value`)
+          - `$association` — field references one of the record IDs in `value`
+          - `$duplicate` — field value is duplicated across records
+        - `value` (any, optional): Value(s) to compare against. Type depends on the
+          operator: a single value, a number-as-string, or an array. Omit (or `null`)
+          for `$having_value` / `$having_no_value`.
+        - `is_filter_exclude` (boolean, optional): When `true`, the condition is negated
+          (NOT). Defaults to `false`.
 
   RecordIds:
     name: record_ids[]
@@ -198,7 +231,8 @@ tags:
 paths:
   '/workspaces/{workspace_id}/{table_name}/records':
     get:
-      description: List all the records in table. Only supports `lead`, `account`, `contact`.
+      description: |
+        List records in a table. Only supports `lead`, `account`, `contact`.
       operationId: records
       parameters:
         - $ref: '#/parameters/WorkspaceId'
@@ -530,11 +564,13 @@ paths:
           description: |
             JSON-encoded structured filter. Shape:
 
-                {
-                  "fields": [
-                    { "field_name": "status", "value": ["new"], "is_filter_exclude": false }
-                  ]
-                }
+            ```json
+            {
+              "fields": [
+                { "field_name": "status", "value": ["new"], "is_filter_exclude": false }
+              ]
+            }
+            ```
 
             Supported `field_name` values: `status`, `source_ids`, `contact`, `product`,
             `assigning_seller`, `created_by`, `cod`, `total_discount`, `created_on`, `modified_on`.
