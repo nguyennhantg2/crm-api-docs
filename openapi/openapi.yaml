@@ -758,7 +758,7 @@ paths:
                       type: object
                       description: A line item in a create/update order request.
                       properties:
-                        item_id:
+                        id:
                           description: |
                             Existing order-item ID (UUID). Provide on update to modify an existing line item;
                             omit to add a new one. Existing items not present in the request are removed.
@@ -766,10 +766,6 @@ paths:
                           format: uuid
                         product_id:
                           description: Product ID for the line item. `id` is accepted as an alias.
-                          type: string
-                          format: uuid
-                        id:
-                          description: Alias for `product_id`.
                           type: string
                           format: uuid
                         quantity:
@@ -805,12 +801,6 @@ paths:
                         type:
                           description: Item type (e.g. product vs service).
                           type: string
-                        service_info:
-                          description: |
-                            Service metadata. When present, the line's amount is treated as already included in
-                            its parent item and is not added to the order totals again.
-                          type: object
-                          additionalProperties: true
                         start_time:
                           description: Service start time.
                           type: string
