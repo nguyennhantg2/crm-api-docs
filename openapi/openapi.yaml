@@ -985,7 +985,10 @@ paths:
       tags:
         - Tickets
     post:
-      description: Create a new ticket in the workspace.
+      description: |
+        Create a new ticket in the workspace.
+
+        Each ticket must be linked to a contact.
       operationId: createTicket
       parameters:
         - $ref: '#/parameters/WorkspaceId'
@@ -1406,7 +1409,6 @@ definitions:
           - new
           - in_progress
           - completed
-          - cancelled
       priority:
         description: Priority level of the ticket.
         type: string
@@ -1416,7 +1418,6 @@ definitions:
           - low
           - medium
           - high
-          - urgent
       due_date:
         description: The date and time when the ticket is due.
         type: string
@@ -1429,21 +1430,27 @@ definitions:
         format: date-time
         nullable: true
       assignee_ids:
-        description: List of user IDs assigned to this ticket.
+        description: |
+          User ID assigned to this ticket. Required.
         type: array
+        minItems: 1
+        maxItems: 1
         items:
           type: string
           format: uuid
         example:
           - "4db4c09e-5fb6-47e7-a4d9-3ad49110155d"
-          - "d1e93867-cc3c-4efe-8280-7b34ab80ba12"
       related_owner:
-        description: List of user IDs related as owners of this ticket.
+        description: |
+          User IDs of everyone else related to this ticket.
         type: array
         nullable: true
         items:
           type: string
           format: uuid
+        example:
+          - "d1e93867-cc3c-4efe-8280-7b34ab80ba12"
+          - "0ff972fd-19a6-487e-b7ce-2398cdc8b875"
       creator_id:
         description: ID of the user who created the ticket.
         type: string
@@ -1478,10 +1485,11 @@ definitions:
         items:
           type: object
       contact_id:
-        description: ID of the related contact/record this ticket is linked to.
+        description: |
+          ID of the contact this ticket is linked to. Required.
+          The value is the `id` of a [record](#/schemas/Record) in the `contact` table.
         type: string
         format: uuid
-        nullable: true
         example: "0c1649c6-2297-4835-9a68-8fdd1d348d8b"
       is_removed:
         description: Whether the ticket has been soft-deleted.
@@ -1500,6 +1508,8 @@ definitions:
         example: "2026-02-04T10:14:32.683430"
     required:
       - title
+      - contact_id
+      - assignee_ids
 
   Order:
     title: Order
