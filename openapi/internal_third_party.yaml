@@ -3,115 +3,10 @@ info:
   title: Pancake CRM Internal Third Party API
   version: 1.0.0
   description: |
-    Internal API used by other products inside the Pancake ecosystem (Botcake, Webcake, Storecake…)
-    to read and write Pancake CRM data on behalf of a connected page.
+    **Internal use only.** API for other Pancake products (Botcake, Webcake, Storecake…) to read and
+    write CRM data on behalf of a connected page.
 
-    > **Internal use only.** These endpoints are not part of the public CRM API and are not
-    > authenticated with a workspace `api_key`. Each third party is registered in CRM with its own
-    > **secret key**; the secret key identifies the calling product and scopes what it is allowed to do.
-
-    ---
-
-    ## Base URL
-
-    ```
-    https://crm.pancake.vn/api/internal_third_party
-    ```
-
-    ---
-
-    ## Third parties
-
-    Every product that talks to CRM through this API is registered as a **third party**. The third
-    party name is the first path segment after the base URL, so each product calls its own scope:
-
-    ```
-    /internal_third_party/{third_party}/{page_id}/records
-    ```
-
-    | Third party | Path segment | Tables visible in `GET /workspaces` |
-    |-------------|--------------|-------------------------------------|
-    | Botcake | `botcake` | All tables of the workspace |
-    | Webcake | `webcake` | V1 tables + `lead` |
-    | Storecake | `storecake` | V1 tables + `lead`, `contact` |
-
-    The secret key alone determines who the caller is. Endpoints that are scoped to a specific third
-    party reject a valid key belonging to a *different* third party with `403`, so a Webcake key
-    cannot be used on the Botcake scope.
-
-    <aside>
-    <b>Current availability:</b> only <code>botcake</code> has routes registered on the server today.
-    Webcake and Storecake are already recognised when scoping workspace tables, but their endpoint
-    scopes are not enabled yet — calling them returns <code>404</code>. They follow exactly the request
-    and response shapes documented here once turned on.
-    </aside>
-
-    ---
-
-    ## Authentication
-
-    Every request must carry the third party secret key, in **either** of these ways:
-
-    | Method | Where | Example |
-    |--------|-------|---------|
-    | Bearer token (**recommended**) | `Authorization` header | `Authorization: Bearer <secret_key>` |
-    | Request parameter | Query string or body | `?secret_key=<secret_key>` |
-
-    Responses on auth failure:
-
-    | Status | Body | When |
-    |--------|------|------|
-    | `401` | `{ "success": false, "message": "Missing secret key" }` | No `Authorization: Bearer` header and no `secret_key` param |
-    | `401` | `{ "success": false, "message": "Invalid secret key" }` | The secret key does not match any registered third party |
-    | `403` | *(empty body)* | The secret key is valid but belongs to a different third party than the one the endpoint is scoped to |
-
-    ---
-
-    ## Workspace resolution
-
-    Except for `GET /workspaces`, every endpoint is scoped by `{third_party}` and `page_id` in the
-    path. CRM resolves the workspace from the page connection (`page.settings.crm_workspace.id`), so
-    the caller never passes a `workspace_id`.
-
-    Resolution errors are returned with HTTP `422`:
-
-    | Message | Meaning |
-    |---------|---------|
-    | `Missing page_id` | `page_id` was not provided |
-    | `Page is not connected to any workspace` | The page has no CRM workspace connected |
-    | `Workspace not found` | The connected workspace no longer exists |
-    | `User workspace not found` | `user_id` was provided but that user is not a member of the workspace |
-
-    ---
-
-    ## Acting on behalf of a user
-
-    Pass `user_id` (the CRM user UUID) to attribute the action to a real user — it becomes
-    `creator_id` on tickets/tasks, `modified_by` on records, and is used to resolve the user's
-    profile and permissions. When omitted, the action is recorded as a system/integration action.
-
-    ---
-
-    ## Response envelope
-
-    All successful responses share the same envelope:
-
-    ```json
-    {
-      "success": true,
-      "data": { },
-      "fallback": "with_data"
-    }
-    ```
-
-    Errors:
-
-    ```json
-    {
-      "success": false,
-      "message": "Missing table_name"
-    }
-    ```
+    Base URL: `https://crm.pancake.vn/api/internal_third_party`
 
   contact:
     name: Pancake CRM Team
@@ -144,30 +39,23 @@ paths:
       tags:
         - Workspaces
       description: |
-        Returns the workspaces visible to the caller, each one preloaded with its `tables`
-        (fields, sections and related metadata).
+        - `page_id` — the workspace that page is connected to.
+        - `user_id` — every workspace the user is a member of.
 
-        Two lookup modes — at least one parameter should be provided:
+        Each workspace comes with its `tables`.
+      x-codeSamples:
+        - lang: bash
+          label: cURL examples
+          source: |
+            # by page_id
+            curl -G 'https://crm.pancake.vn/api/internal_third_party/workspaces' \
+              -H 'Authorization: Bearer <secret_key>' \
+              --data-urlencode 'page_id=104943019063372'
 
-        - **By page** — pass `page_id`. Returns the single workspace the page is connected to
-          (empty array when the page is not connected).
-        - **By user** — pass `user_id`. Returns every workspace the user is a member of, sorted by
-          the user's preferred workspace first.
-
-        When both are provided, `page_id` wins and `user_id` is only used to attach the
-        `user_workspace` membership info.
-
-        **Which tables come back** depends on the third party the secret key belongs to:
-
-        | Third party | Tables |
-        |-------------|--------|
-        | Botcake | All tables of the workspace |
-        | Webcake | V1 tables + `lead` |
-        | Storecake | V1 tables + `lead`, `contact` |
-
-        <aside>The workspace <code>settings</code> object is never returned to internal third parties.
-        On each table, <code>views</code>, <code>user_settings</code> and <code>permissions</code>
-        always come back empty; <code>dashboards</code> is additionally empty for Botcake.</aside>
+            # by user_id
+            curl -G 'https://crm.pancake.vn/api/internal_third_party/workspaces' \
+              -H 'Authorization: Bearer <secret_key>' \
+              --data-urlencode 'user_id=4db4c09e-5fb6-47e7-a4d9-3ad49110155d'
       parameters:
         - $ref: '#/components/parameters/PageIdQuery'
         - $ref: '#/components/parameters/UserId'
@@ -201,17 +89,32 @@ paths:
       tags:
         - Records
       description: |
-        Look up the records of a connected page's workspace.
+        - `record_id` — returns that single record.
+        - Otherwise `filter` must contain `psid` or `page_customer_ids`, else `422 Missing psid`.
 
-        Two modes:
+        `filter` is a JSON object and must be URL-encoded — `--data-urlencode` in the samples below
+        handles it.
+      x-codeSamples:
+        - lang: bash
+          label: cURL examples
+          source: |
+            # by psid
+            curl -G 'https://crm.pancake.vn/api/internal_third_party/botcake/104943019063372/records' \
+              -H 'Authorization: Bearer <secret_key>' \
+              --data-urlencode 'table_name=contact' \
+              --data-urlencode 'filter={"psid":"8342103555886651"}'
 
-        - **Get one record** — pass `record_id`. Returns a single record object (relations preloaded).
-        - **List records** — omit `record_id` and pass a `filter` that identifies the customer.
-          The filter **must** contain `psid` or `page_customer_ids`, otherwise the request fails with
-          `Missing psid`. CRM maps `page_id` + `psid` to the matching `page_customer_ids` before querying.
+            # by page_customer_ids
+            curl -G 'https://crm.pancake.vn/api/internal_third_party/botcake/104943019063372/records' \
+              -H 'Authorization: Bearer <secret_key>' \
+              --data-urlencode 'table_name=contact' \
+              --data-urlencode 'filter={"page_customer_ids":["104943019063372_8342103555886651"]}'
 
-        A `psid` that is not mapped to any page customer resolves to an impossible id, so the result
-        is an empty `entries` list rather than an error.
+            # by record_id
+            curl -G 'https://crm.pancake.vn/api/internal_third_party/botcake/104943019063372/records' \
+              -H 'Authorization: Bearer <secret_key>' \
+              --data-urlencode 'table_name=contact' \
+              --data-urlencode 'record_id=2f941efe-d9a3-4d9a-affe-e123b06b8a44'
       parameters:
         - $ref: '#/components/parameters/ThirdPartyPath'
         - $ref: '#/components/parameters/PageIdPath'
@@ -293,12 +196,7 @@ paths:
       operationId: internalUpsertRecord
       tags:
         - Records
-      description: |
-        Create or update a record in the connected page's workspace.
-
-        Include `params.id` to update an existing record; omit it to create a new one. The record is
-        stamped with the calling third party as its origin, and post-update automations
-        (activities, notifications, triggers) run as usual.
+      description: '`params.id` present ⇒ update, omitted ⇒ create.'
       parameters:
         - $ref: '#/components/parameters/ThirdPartyPath'
         - $ref: '#/components/parameters/PageIdPath'
@@ -313,7 +211,10 @@ paths:
                 - params
               properties:
                 table_name:
-                  $ref: '#/components/schemas/TableName'
+                  description: Table of records.
+                  type: string
+                  enum: [lead, contact]
+                  example: contact
                 user_id:
                   description: CRM user UUID the upsert is attributed to.
                   type: string
@@ -357,18 +258,8 @@ paths:
       tags:
         - Tickets
       description: |
-        Create a ticket in the connected page's workspace.
-
-        The ticket must be linked to a contact. Provide **either**:
-
-        - `contact_id` — the `id` of an existing record in the `contact` table, or
-        - `contact` — a contact payload, which is upserted first and then linked. When the contact is
-          new and no `source` is given, CRM sets its source from the page's platform and `page_id`.
-
-        Missing both returns `Ticket must have either contact_id`.
-
-        When `status` is omitted, the workspace's default *new* ticket status is applied.
-        Ticket fields may be sent at the top level of the body or nested under `params`.
+        Requires either `contact_id` or `contact` — neither ⇒ `422 Ticket must have either contact_id`.
+        Fields go at the top level or under `params`.
       parameters:
         - $ref: '#/components/parameters/ThirdPartyPath'
         - $ref: '#/components/parameters/PageIdPath'
@@ -385,9 +276,7 @@ paths:
                       type: string
                       format: uuid
                     params:
-                      description: |
-                        Optional wrapper. When present, ticket fields are read from here instead of
-                        the top level of the body.
+                      description: Optional wrapper — when present, ticket fields are read from here instead of the top level.
                       $ref: '#/components/schemas/Ticket'
                 - $ref: '#/components/schemas/Ticket'
             example:
@@ -429,13 +318,8 @@ paths:
       tags:
         - Tasks
       description: |
-        Create a task in the connected page's workspace.
-
-        `name` and `due_at` are required. Passing `record_id` links the task to a record and writes a
-        task activity onto that record's timeline; `record_id` and `table_name` are used for the link
-        only and are not stored on the task itself.
-
-        Task fields may be sent at the top level of the body or nested under `params` / `data`.
+        `name` and `due_at` are required. `record_id` + `table_name` link the task to a record.
+        Fields go at the top level or under `params` / `data`.
       parameters:
         - $ref: '#/components/parameters/ThirdPartyPath'
         - $ref: '#/components/parameters/PageIdPath'
@@ -452,9 +336,7 @@ paths:
                       type: string
                       format: uuid
                     params:
-                      description: |
-                        Optional wrapper. When present, task fields are read from here instead of the
-                        top level of the body. `data` is accepted as an alias.
+                      description: Optional wrapper — when present, task fields are read from here instead of the top level. `data` is an alias.
                       $ref: '#/components/schemas/Task'
                 - $ref: '#/components/schemas/Task'
             example:
@@ -494,27 +376,21 @@ components:
     SecretKeyBearer:
       type: http
       scheme: bearer
-      description: |
-        The third party secret key, sent as `Authorization: Bearer <secret_key>`.
-        Keys are issued per third party — contact the Pancake CRM team to register one.
+      description: >-
+        Third party secret key, sent as `Authorization: Bearer <secret_key>`.
+        Contact the Pancake CRM team to register one.
     SecretKeyQuery:
       type: apiKey
       in: query
       name: secret_key
-      description: |
-        Alternative to the bearer header — the same secret key sent as a `secret_key` request
-        parameter (query string or body). Prefer the header whenever possible.
+      description: Same secret key sent as a `secret_key` param (query string or body). Prefer the bearer header.
 
   parameters:
     ThirdPartyPath:
       name: third_party
       in: path
       required: true
-      description: |
-        Name of the calling third party. Must match the third party the secret key belongs to,
-        otherwise the request is rejected with `403`.
-
-        Only `botcake` has routes registered today — see **Third parties** in the introduction.
+      description: Must match the third party the secret key belongs to, otherwise `403`. Only `botcake` is enabled today.
       schema:
         type: string
         enum:
@@ -527,9 +403,7 @@ components:
       name: page_id
       in: path
       required: true
-      description: |
-        ID of the page (Facebook/Zalo/… page) connected to a CRM workspace.
-        CRM resolves the target workspace from this page.
+      description: ID of the page (Facebook/Zalo/…) connected to a CRM workspace.
       schema:
         type: string
       example: '104943019063372'
@@ -537,22 +411,20 @@ components:
     PageIdQuery:
       name: page_id
       in: query
-      required: false
+      required: true
       description: |
-        ID of a page connected to a CRM workspace. When provided, only the workspace of that page is
-        returned.
+        ID of a page connected to a CRM workspace. When provided, only that page's workspace is
+        returned. Leave it empty when querying by `user_id`.
       schema:
         type: string
+        default: '104943019063372'
       example: '104943019063372'
 
     UserId:
       name: user_id
       in: query
       required: false
-      description: |
-        CRM user UUID the action is performed on behalf of. Used to resolve the user's workspace
-        membership and profile. Returns `User workspace not found` if the user is not a member of the
-        resolved workspace.
+      description: CRM user UUID the action is performed on behalf of. Must be a member of the workspace.
       schema:
         type: string
         format: uuid
@@ -562,19 +434,18 @@ components:
       name: table_name
       in: query
       required: true
-      description: |
-        The table to read records from. Accepts one of:
-        - `lead`
-        - `contact`
+      description: The table to read records from.
       schema:
-        $ref: '#/components/schemas/TableName'
+        type: string
+        enum: [lead, contact]
+        default: contact
+      example: contact
 
     RecordIdQuery:
       name: record_id
       in: query
       required: false
-      description: |
-        Record ID. When provided, a single record is returned and `filter` is ignored.
+      description: Record ID. When provided, a single record is returned and `filter` is ignored.
       schema:
         type: string
         format: uuid
@@ -583,34 +454,20 @@ components:
     RecordFilter:
       name: filter
       in: query
-      required: false
+      required: true
       description: |
-        Filter object, sent either as a JSON-encoded string or as nested query params.
-        Required when `record_id` is omitted — it must identify the customer through `psid` or
-        `page_customer_ids`, otherwise the request fails with `Missing psid`.
+        JSON-encoded string or nested query params. Required when `record_id` is omitted, and must
+        contain `psid` or `page_customer_ids`. Leave it empty when querying by `record_id`.
 
-        ```json
-        {
-          "psid": "8342103555886651",
-          "search_all": "",
-          "fields": []
-        }
-        ```
-
-        Properties:
-        - `psid` (string): Page-scoped ID of the customer on the page. CRM resolves it to the
-          matching `page_customer_ids` using the `page_id` from the path.
-        - `page_customer_ids` (array of string): Pre-resolved page customer IDs, formatted as
-          `<page_id>_<page_customer_id>`. Use this to skip the `psid` lookup.
-        - `search_all` (string, optional): Global full-text search across text, phone and number
-          fields of the record.
-        - `is_group` (boolean, optional): When `true`, conditions in `fields` are combined with
-          **OR**. Defaults to **AND**.
-        - `fields` (array, optional): Additional field conditions, each with `field_name`, `type`,
-          `value` and `is_filter_exclude` — same shape as the public
-          [Records API](https://crm.pancake.vn/developers).
+        - `psid` (string): Page-scoped ID of the customer.
+        - `page_customer_ids` (string[]): Page customer IDs, formatted as `<page_id>_<page_customer_id>`.
+        - `search_all` (string): Full-text search across text, phone and number fields.
+        - `is_group` (boolean): `true` combines `fields` conditions with **OR**. Defaults to **AND**.
+        - `fields` (array): Field conditions with `field_name`, `type`, `value`, `is_filter_exclude` —
+          same shape as the public [Records API](https://crm.pancake.vn/developers).
       schema:
         type: string
+        default: '{"psid":"8342103555886651"}'
       example: '{"psid":"8342103555886651"}'
 
     Page:
@@ -638,7 +495,13 @@ components:
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
           examples:
             missing:
               value:
@@ -650,16 +513,20 @@ components:
                 message: Invalid secret key
 
     Forbidden:
-      description: |
-        The secret key is valid but belongs to a different third party than the `{third_party}`
-        segment in the path. The response body is empty.
+      description: Secret key belongs to a different third party. Empty response body.
 
     UnprocessableEntity:
-      description: Validation error — workspace resolution failed or required params are missing
+      description: Validation error
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/Error'
+            type: object
+            properties:
+              success:
+                type: boolean
+                example: false
+              message:
+                type: string
           examples:
             missing_page_id:
               value:
@@ -677,41 +544,20 @@ components:
               value:
                 success: false
                 message: Missing psid
+            user_workspace_not_found:
+              value:
+                success: false
+                message: User workspace not found
             missing_contact:
               value:
                 success: false
                 message: Ticket must have either contact_id
 
   schemas:
-    TableName:
-      type: string
-      description: |
-        The table of records. Accepts one of:
-        - `lead`
-        - `contact`
-      enum:
-        - lead
-        - contact
-      example: contact
-
-    Error:
-      title: Error
-      type: object
-      properties:
-        success:
-          description: Always `false` for error responses.
-          type: boolean
-          example: false
-        message:
-          description: Human-readable reason for the failure.
-          type: string
-
     Workspace:
       title: Workspace
       type: object
-      description: |
-        A CRM workspace together with its table metadata.
-        The workspace `settings` object is never returned to internal third parties.
+      description: A CRM workspace with its table metadata.
       properties:
         id:
           type: integer
@@ -729,15 +575,11 @@ components:
           type: string
           example: VND
         user_workspace:
-          description: |
-            The user's membership in this workspace, including its `profile_id`.
-            Only present when `user_id` is provided.
+          description: The user's membership in this workspace. Only present when `user_id` is provided.
           type: object
           nullable: true
         tables:
-          description: |
-            Tables of the workspace. Which ones are included depends on the calling third party —
-            see the endpoint description.
+          description: Tables of the workspace.
           type: array
           items:
             type: object
@@ -751,8 +593,7 @@ components:
                 type: string
                 example: Liên hệ
               fields:
-                description: |
-                  Field definitions of the table, including custom fields and their select options.
+                description: Field definitions of the table, including custom fields and their select options.
                 type: array
                 items:
                   type: object
@@ -766,14 +607,12 @@ components:
       title: Record
       type: object
       description: |
-        A record in the `lead` or `contact` table.
-        Beyond the system fields below, a record also carries the workspace's custom fields —
-        see `tables[].fields` from [List workspaces](#/operations/internalListWorkspaces).
+        A record in the `lead` or `contact` table. Beyond the system fields below, a record also carries
+        the workspace's custom fields — see `tables[].fields` from
+        [List workspaces](#/operations/internalListWorkspaces).
       properties:
         id:
-          description: >
-            Record ID. If provided on upsert, the record is updated.
-            If omitted, a new record is created.
+          description: Record ID. Provided on upsert ⇒ update; omitted ⇒ create.
           type: string
           format: uuid
         name:
@@ -790,9 +629,9 @@ components:
           type: string
           format: date-time
         full_address:
-          description: |
-            Full address of the lead/customer.
-            Recommended format: street number + street name, ward, district, city/province, country.
+          description: >-
+            Full address. Recommended format: street number + street name, ward, district,
+            city/province, country.
           type: string
           example: Số 126 Hàng Trống, Phường Hoàn Kiếm, Hà Nội, Việt Nam
         pancake_tags:
@@ -845,9 +684,7 @@ components:
     Ticket:
       title: Ticket
       type: object
-      description: |
-        A ticket represents a task, issue, or work item associated with a workspace.
-        Read-only fields are generated by CRM and only appear in responses.
+      description: A ticket / issue / work item in a workspace.
       properties:
         id:
           type: string
@@ -860,20 +697,16 @@ components:
           example: '00001'
           readOnly: true
         title:
-          description: Title or short summary of the ticket. Required.
+          description: Ticket title.
           type: string
           example: Khách hỏi về tình trạng đơn hàng
         contact_id:
-          description: |
-            ID of the `contact` record this ticket is linked to.
-            Required unless `contact` is provided.
+          description: ID of the linked `contact` record. Required unless `contact` is provided.
           type: string
           format: uuid
           example: 0c1649c6-2297-4835-9a68-8fdd1d348d8b
         contact:
-          description: |
-            Contact payload upserted before the ticket is created; the resulting record becomes
-            `contact_id`. Use this when the contact may not exist in CRM yet.
+          description: Contact payload to send instead of `contact_id` when the contact may not exist in CRM yet.
           allOf:
             - $ref: '#/components/schemas/Record'
         description:
@@ -887,9 +720,7 @@ components:
           nullable: true
           example: order
         status:
-          description: |
-            Status ID of the ticket, taken from the workspace's ticket status list.
-            When omitted on create, the workspace's default *new* status is applied.
+          description: Status ID from the workspace's ticket status list.
           type: string
           nullable: true
         priority:
@@ -949,7 +780,7 @@ components:
           additionalProperties: true
           nullable: true
         creator_id:
-          description: ID of the user who created the ticket — the `user_id` sent in the request.
+          description: ID of the user who created the ticket.
           type: string
           format: uuid
           nullable: true
@@ -981,9 +812,7 @@ components:
     Task:
       title: Task
       type: object
-      description: |
-        A task (to-do / follow-up work item) inside a workspace.
-        Read-only fields are generated by CRM and only appear in responses.
+      description: A task (to-do / follow-up) in a workspace.
       properties:
         id:
           type: string
@@ -996,43 +825,39 @@ components:
           nullable: true
           readOnly: true
         name:
-          description: Name of the task. Required.
+          description: Task name.
           type: string
           example: Gọi lại tư vấn khách
         due_at:
-          description: The date and time when the task is due. Required.
+          description: The date and time when the task is due.
           type: string
           format: date-time
           example: '2026-08-07T09:37:25'
         record_id:
-          description: |
-            ID of the record this task is linked to. When provided, the task is attached to that
-            record and a task activity is written onto its timeline. Used for the link only —
-            not stored on the task itself.
+          description: Record to link the task to.
           type: string
           format: uuid
           nullable: true
         table_name:
-          description: |
-            Table of the linked `record_id`. Used for the link only — not stored on the task itself.
-          allOf:
-            - $ref: '#/components/schemas/TableName'
+          description: Table of the linked `record_id`.
+          type: string
+          enum: [lead, contact]
+          example: lead
         description:
           type: string
           nullable: true
         category_id:
-          description: |
-            ID of the task category. Categories named `task.call` also schedule an appointment call.
+          description: Task category ID. Categories named `task.call` also schedule an appointment call.
           type: string
           format: uuid
           nullable: true
         status:
-          description: Status ID of the task, taken from the workspace's task status list.
+          description: Status ID from the workspace's task status list.
           type: string
           format: uuid
           nullable: true
         priority:
-          description: Priority ID of the task, taken from the workspace's task priority list.
+          description: Priority ID from the workspace's task priority list.
           type: string
           format: uuid
           nullable: true
