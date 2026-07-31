@@ -40,7 +40,20 @@ RESTful API documentation for Pancake CRM, including record management, order ma
 
 Pancake CRM can push record change events to your HTTP endpoint in real-time. See [`openapi/webhook.yaml`](./openapi/webhook.yaml) for payload schema and setup instructions.
 
+## Internal Third Party
+
+Internal API used by other Pancake products (Botcake, Webcake, Storecake…) to read and write CRM data on behalf of a connected page. Each third party is registered with its own **secret key** (`Authorization: Bearer <secret_key>`) — not a workspace `api_key` — and calls its own path scope.
+
+- Base URL: `/api/internal_third_party`
+- `GET /workspaces` — Resolve workspaces of a page or user (with table metadata)
+- `GET/POST /{third_party}/{page_id}/records` — List/get records by `psid`, upsert records
+- `POST /{third_party}/{page_id}/tickets` — Create ticket linked to a contact
+- `POST /{third_party}/{page_id}/tasks` — Create task
+
+`{third_party}` is `botcake`, `webcake` or `storecake`; it also decides which workspace tables are visible. Only `botcake` has routes registered on the server today.
+
 ## Documentation
 
 - OpenAPI spec: [`openapi/openapi.yaml`](./openapi/openapi.yaml)
 - Webhook spec: [`openapi/webhook.yaml`](./openapi/webhook.yaml)
+- Internal third party spec: [`openapi/internal_third_party.yaml`](./openapi/internal_third_party.yaml)

@@ -38,3 +38,7 @@
   color: #ffffff;
   border-bottom-color: #4a90d9;
 }
+
+.doc-tabs a[hidden] {
+  display: none;
+}

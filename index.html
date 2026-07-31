@@ -14,24 +14,12 @@
 
 <body>
   <nav class="doc-tabs">
-    <a href="/developers" id="tab-api">API Reference</a>
-    <a href="/developers?doc=webhook" id="tab-webhook">Webhooks</a>
+    <a href="?" id="tab-api">API Reference</a>
+    <a href="?doc=webhook" id="tab-webhook">Webhooks</a>
+    <a href="?doc=internal_third_party" id="tab-internal_third_party" hidden>Internal Third Party</a>
   </nav>
   <div id="docs-root"></div>
-  <script>
-    (function () {
-      var params = new URLSearchParams(window.location.search);
-      var doc = params.get('doc') === 'webhook' ? 'webhook' : 'api';
-      var specUrl = doc === 'webhook' ? './openapi/webhook.yaml' : './openapi/openapi.yaml';
-      document.title = doc === 'webhook' ? 'Pancake CRM Webhooks Docs' : 'Pancake CRM API Docs';
-      document.getElementById('tab-' + (doc === 'webhook' ? 'webhook' : 'api')).classList.add('active');
-      var el = document.createElement('elements-api');
-      el.setAttribute('apiDescriptionUrl', specUrl);
-      el.setAttribute('layout', 'sidebar');
-      el.setAttribute('router', 'hash');
-      document.getElementById('docs-root').appendChild(el);
-    })();
-  </script>
+  <script src="./assets/js/index.js"></script>
 </body>
 
 </html>
