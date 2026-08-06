@@ -200,6 +200,14 @@ parameters:
     type: string
     format: uuid
 
+  ProductId:
+    description: The product ID (UUID).
+    in: path
+    name: id
+    required: true
+    type: string
+    format: uuid
+
   Page:
     description: Page number for pagination (1-based).
     in: query
@@ -388,152 +396,271 @@ paths:
       tags:
         - Records
 
-  # '/workspaces/{workspace_id}/products':
-  #   get:
-  #     description: List all the products in a workspace.
-  #     operationId: listProducts
-  #     parameters:
-  #       - $ref: '#/parameters/WorkspaceId'
-  #       - name: page
-  #         in: query
-  #         type: integer
-  #         default: 1
-  #         description: Page number for pagination
-  #       - name: page_size
-  #         in: query
-  #         type: integer
-  #         default: 30
-  #         description: Number of products per page
-  #     responses:
-  #       '200':
-  #         description: Products returned
-  #         schema:
-  #           title: Products List
-  #           type: object
-  #           description: Products list response
-  #           properties:
-  #             success:
-  #               description: Indicates whether the request was successful
-  #               type: boolean
-  #             data:
-  #               description: List of product objects
-  #               items:
-  #                 $ref: '#/definitions/Product'
-  #               type: array
-  #     summary: List products
-  #     tags:
-  #       - Products
-  #   post:
-  #     description: Create a new product in the workspace.
-  #     operationId: createProduct
-  #     parameters:
-  #       - $ref: '#/parameters/WorkspaceId'
-  #       - description: Product body
-  #         in: body
-  #         name: body
-  #         required: true
-  #         schema:
-  #           $ref: '#/definitions/Product'
-  #     responses:
-  #       '200':
-  #         description: Product created successfully
-  #         schema:
-  #           title: Product Create Response
-  #           type: object
-  #           description: Response object after creating a product
-  #           properties:
-  #             success:
-  #               description: Indicates whether the create operation was successful
-  #               type: boolean
-  #             data:
-  #               description: The created product object
-  #               $ref: '#/definitions/Product'
-  #       '403':
-  #         description: "Forbidden, insufficient permissions"
-  #         schema:
-  #           title: Error Response
-  #           type: object
-  #           description: Error response object
-  #           properties:
-  #             success:
-  #               description: Always false for error responses
-  #               type: boolean
-  #             message:
-  #               type: object
-  #       '422':
-  #         description: "Invalid product payload"
-  #         schema:
-  #           title: Error Response
-  #           type: object
-  #           properties:
-  #             success:
-  #               type: boolean
-  #             message:
-  #               type: string
-  #     summary: Create product
-  #     tags:
-  #       - Products
+  '/workspaces/{workspace_id}/products':
+    get:
+      description: |
+        List products in a workspace, most recent first.
 
-  # '/workspaces/{workspace_id}/products/{product_id}':
-  #   put:
-  #     description: Update an existing product by ID. Only provided fields will be updated.
-  #     operationId: updateProduct
-  #     parameters:
-  #       - $ref: '#/parameters/WorkspaceId'
-  #       - description: The product ID
-  #         in: path
-  #         name: product_id
-  #         required: true
-  #         type: string
-  #         format: uuid
-  #       - description: Product fields to update
-  #         in: body
-  #         name: body
-  #         required: true
-  #         schema:
-  #           type: object
-  #           properties:
-  #             data:
-  #               $ref: '#/definitions/Product'
-  #           required:
-  #             - data
-  #     responses:
-  #       '200':
-  #         description: Product updated successfully
-  #         schema:
-  #           title: Product Update Response
-  #           type: object
-  #           description: Response object after updating a product
-  #           properties:
-  #             success:
-  #               description: Indicates whether the update operation was successful
-  #               type: boolean
-  #             data:
-  #               description: The updated product object
-  #               $ref: '#/definitions/Product'
-  #       '403':
-  #         description: "Forbidden, insufficient permissions"
-  #         schema:
-  #           title: Error Response
-  #           type: object
-  #           properties:
-  #             success:
-  #               type: boolean
-  #             message:
-  #               type: object
-  #       '404':
-  #         description: Product not found
-  #         schema:
-  #           title: Error Response
-  #           type: object
-  #           properties:
-  #             success:
-  #               type: boolean
-  #             message:
-  #               type: string
-  #     summary: Update product
-  #     tags:
-  #       - Products
+        By default each product variation is expanded into its own entry in `entries`
+        (the variation's `id`, `custom_id`, `retail_price`, `import_price`,
+        `remain_quantity`, `images` and `sort_variation_attributes` override the parent
+        product's, and `product_id` points back to the parent). Pass `show_products=true`
+        to return the parent products with their `variations` array instead of the flattened form.
+
+        When `get_info=true` the response `data` is a paginated envelope
+        (`entries`, `page_number`, `page_size`, `total_entries`, `total_pages`).
+        Otherwise `data` is just the entries array.
+      operationId: listProducts
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/Page'
+        - $ref: '#/parameters/PageSize'
+        - name: search
+          in: query
+          type: string
+          required: false
+          description: Free-text search. Matches product `name` or `custom_id` (case-insensitive).
+        - name: ids
+          in: query
+          type: array
+          collectionFormat: multi
+          items:
+            type: string
+            format: uuid
+          required: false
+          description: Restrict the result to products whose `id` is in this list.
+        - name: type
+          in: query
+          type: array
+          collectionFormat: multi
+          items:
+            type: string
+            enum:
+              - product
+              - service
+              - service_package
+          required: false
+          description: |
+            Filter by product `type`. Accepts one or more of `product`, `service`, `service_package`.
+        - name: category_ids
+          in: query
+          type: array
+          collectionFormat: multi
+          items:
+            type: string
+            format: uuid
+          required: false
+          description: Return only products that belong to at least one of these categories.
+        - name: filter
+          in: query
+          type: string
+          required: false
+          example: '{"fields":[]}'
+          description: |
+            JSON-encoded structured filter. Shape:
+
+            ```json
+            {
+              "fields": [
+                { "field_name": "retail_price", "type": "$greater_than", "value": 100000 },
+                { "field_name": "type", "value": ["product"], "is_filter_exclude": false }
+              ]
+            }
+            ```
+
+            Supported `field_name` values: `type`, `category_ids`, `retail_price`,
+            `import_price`, `remain_quantity`, `duration`, `images`.
+            Supported comparison `type` values: `$greater_than`, `$less_than`,
+            `$having_value`, `$having_no_value`. Omit `type` for an equality match
+            (respecting `is_filter_exclude`).
+        - name: show_products
+          in: query
+          type: string
+          required: false
+          enum:
+            - "true"
+            - "false"
+          description: |
+            When `"true"`, return parent products with a nested `variations` array.
+            When omitted or `"false"` (default), each variation is expanded into its
+            own entry (flattened view).
+        - name: get_info
+          in: query
+          type: boolean
+          required: false
+          description: When `true`, wrap `data` in a paginated envelope with `total_entries` and `total_pages`.
+        - name: module
+          in: query
+          type: string
+          required: false
+          description: |
+            Optional module hint used by workspace-specific overrides
+            (e.g. `calendar` on the POS-Sale workspace ignores the `type` filter).
+      responses:
+        '200':
+          description: Products returned
+          schema:
+            title: Products List
+            type: object
+            description: Products list response
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              fallback:
+                type: string
+                example: "with_data"
+              data:
+                description: |
+                  When `get_info=true`, a paginated envelope. Otherwise the entries array directly.
+                oneOf:
+                  - type: array
+                    items:
+                      $ref: '#/definitions/Product'
+                  - type: object
+                    properties:
+                      entries:
+                        type: array
+                        items:
+                          $ref: '#/definitions/Product'
+                      page_number:
+                        type: integer
+                        example: 1
+                      page_size:
+                        type: integer
+                        example: 30
+                      total_entries:
+                        type: integer
+                        example: 42
+                      total_pages:
+                        type: integer
+                        example: 2
+      summary: List products
+      tags:
+        - Products
+    post:
+      description: |
+        Create a new product in the workspace.
+
+        `type` defaults to `product` when omitted. Type-specific fields are stripped
+        server-side: `service` drops `remain_quantity`, `service_package` drops
+        `remain_quantity` and `duration`, and only `service_package` keeps
+        `service_package_product`. Provide `variations` to create product variations
+        in the same request; provide `service_package_product` (for `type: service_package`)
+        to link component services with their quantities.
+      operationId: createProduct
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - description: Product payload
+          in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/Product'
+      responses:
+        '200':
+          description: Product created successfully
+          schema:
+            title: Product Create Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              data:
+                $ref: '#/definitions/Product'
+        '422':
+          description: Invalid product payload (validation failed or duplicate `custom_id`).
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message_code:
+                type: string
+                enum:
+                  - unique_custom_id
+                  - unknown_error
+      summary: Create product
+      tags:
+        - Products
+
+  '/workspaces/{workspace_id}/products/{id}':
+    get:
+      description: Retrieve a single product by ID.
+      operationId: getProduct
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/ProductId'
+      responses:
+        '200':
+          description: Product returned
+          schema:
+            title: Product Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              data:
+                $ref: '#/definitions/Product'
+        '404':
+          description: Product not found
+      summary: Get product
+      tags:
+        - Products
+    put:
+      description: |
+        Update an existing product. The body must be wrapped in a `data` object and
+        `data.id` must match the product to update (the same ID as in the URL).
+
+        Passing `variations` replaces the product's variations: existing variations
+        whose `custom_id` is not in the new list are deleted, matches are updated,
+        and new entries are inserted. Passing `service_package_product` (only valid
+        for `type: service_package`) fully replaces the linked service list.
+      operationId: updateProduct
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/ProductId'
+        - description: Product update payload
+          in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - data
+            properties:
+              data:
+                $ref: '#/definitions/Product'
+      responses:
+        '200':
+          description: Product updated successfully
+          schema:
+            title: Product Update Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              data:
+                $ref: '#/definitions/Product'
+        '404':
+          description: Product not found
+        '422':
+          description: Invalid product payload (validation failed or duplicate `custom_id`).
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message_code:
+                type: string
+                enum:
+                  - unique_custom_id
+                  - unknown_error
+      summary: Update product
+      tags:
+        - Products
 
   '/workspaces/{workspace_id}/orders':
     get:
@@ -695,13 +822,10 @@ paths:
                     description: Order status. Defaults to `new` when omitted on create.
                     type: string
                     example: "new"
-                  code:
-                    description: Custom order code. Stored as `custom_id` (alias of `custom_id`).
+                  custom_id:
+                    description: Custom order code.
                     type: string
                     example: "OD00012"
-                  custom_id:
-                    description: Custom order code. Use this or `code`.
-                    type: string
                   bill_phone_number:
                     description: Billing phone number. Defaults to the linked contact's phone number.
                     type: string
@@ -1838,4 +1962,216 @@ definitions:
     required:
       - id
       - text
+
+  Product:
+    title: Product
+    type: object
+    description: |
+      A product, service, or service package sold by a workspace.
+
+      The `type` field determines how the entry behaves:
+      - `product` — a physical/inventory item; `remain_quantity` is tracked.
+      - `service` — a bookable service; `duration` (in minutes) applies, `remain_quantity` is ignored.
+      - `service_package` — a bundle of services; `service_package_product` lists the
+        component services with their quantities. `remain_quantity` and `duration` are ignored.
+
+      Monetary amounts are integers in the workspace currency's smallest practical unit
+      (for VND this is the dong, with no decimals).
+    required:
+      - name
+    properties:
+      id:
+        description: Unique identifier (UUID) of the product. Omit when creating; provide when updating.
+        type: string
+        format: uuid
+        example: "3a5b1b0e-88bd-4d34-9a4b-2c4f4be21f38"
+      name:
+        description: Product name.
+        type: string
+        example: "Áo thun nam"
+      type:
+        description: Product type. Defaults to `product` on create.
+        type: string
+        enum:
+          - product
+          - service
+          - service_package
+        default: "product"
+        example: "product"
+      custom_id:
+        description: Custom product code (unique per workspace).
+        type: string
+        nullable: true
+        example: "SKU-001"
+      description:
+        description: Free-text description of the product.
+        type: string
+        nullable: true
+      images:
+        description: List of image URLs for the product.
+        type: array
+        nullable: true
+        items:
+          type: string
+        example: ["https://static.pancake.vn/pancake/products/example.jpg"]
+      category_ids:
+        description: IDs of the categories this product belongs to.
+        type: array
+        nullable: true
+        items:
+          type: string
+          format: uuid
+      retail_price:
+        description: Selling price per unit.
+        type: integer
+        default: 0
+        example: 150000
+      import_price:
+        description: Cost/import price per unit.
+        type: integer
+        default: 0
+        example: 90000
+      remain_quantity:
+        description: |
+          Current stock on hand. Only meaningful for `type: product` —
+          stripped server-side for `service` and `service_package`.
+        type: integer
+        default: 0
+        example: 42
+      duration:
+        description: |
+          Service duration in minutes. Only meaningful for `type: service` —
+          stripped server-side for `product` and `service_package`.
+        type: integer
+        nullable: true
+        example: 60
+      is_removed:
+        description: Whether the product has been soft-deleted.
+        type: boolean
+        default: false
+      product_attributes:
+        description: |
+          Attribute definitions used to build variations (e.g. Color, Size).
+          Each attribute declares a `name` and its allowed `values`.
+        type: array
+        items:
+          $ref: '#/definitions/ProductAttribute'
+      variations:
+        description: |
+          Product variations (e.g. Red / Size L). On write, this array fully replaces
+          the current variations: existing rows whose `custom_id` is missing from the
+          new list are deleted, matching rows are updated, and new ones are inserted.
+        type: array
+        items:
+          $ref: '#/definitions/ProductVariation'
+      service_package_product:
+        description: |
+          Only for `type: service_package` — the component services included in the package,
+          each with the quantity used per package. On write, fully replaces the existing links.
+        type: array
+        items:
+          $ref: '#/definitions/ServicePackageProductItem'
+
+  ProductAttribute:
+    title: Product Attribute
+    type: object
+    description: A named attribute (e.g. Color, Size) whose values combine to form variations.
+    required:
+      - name
+    properties:
+      name:
+        description: Attribute display name.
+        type: string
+        example: "Color"
+      values:
+        description: Allowed values for this attribute.
+        type: array
+        items:
+          type: string
+        example: ["Red", "Blue", "Green"]
+      keyword:
+        description: Optional keyword metadata per value (used by search / recognition features).
+        type: array
+        items:
+          type: object
+          additionalProperties: true
+
+  ProductVariation:
+    title: Product Variation
+    type: object
+    description: |
+      A specific SKU of a product (e.g. Red / Size L). Variations override the parent
+      product's `custom_id`, `retail_price`, `import_price`, `remain_quantity` and `images`.
+    required:
+      - custom_id
+    properties:
+      id:
+        description: Unique identifier (UUID) of the variation. Omit when creating.
+        type: string
+        format: uuid
+      custom_id:
+        description: Variation SKU / custom code. Required and used as the merge key on update.
+        type: string
+        example: "SKU-001-RED-L"
+      retail_price:
+        description: Selling price per unit for this variation.
+        type: integer
+        default: 0
+        example: 160000
+      import_price:
+        description: Cost/import price per unit for this variation.
+        type: integer
+        default: 0
+      remain_quantity:
+        description: Current stock on hand for this variation.
+        type: integer
+        default: 0
+      images:
+        description: Image URLs specific to this variation (falls back to the parent product's images if empty).
+        type: array
+        items:
+          type: string
+      sort_variation_attributes:
+        description: |
+          Canonical string of the variation's attribute values used for sorting/matching
+          (typically the attribute values joined in a defined order, e.g. `"Red|L"`).
+        type: string
+        nullable: true
+      extra_info:
+        description: |
+          Free-form additional metadata for the variation.
+
+          Known keys:
+          - `fb_catalog_id` — ID of the corresponding product in the Meta (Facebook) catalog.
+            Used to fire conversion events (Purchase, AddToCart, …) so they match the right
+            catalog item for ad optimization / attribution.
+        type: object
+        additionalProperties: true
+        example:
+          fb_catalog_id: "1234567890"
+      is_removed:
+        description: Whether the variation has been soft-deleted.
+        type: boolean
+        default: false
+
+  ServicePackageProductItem:
+    title: Service Package Component
+    type: object
+    description: |
+      A component service inside a service package. Sent as an item of
+      `Product.service_package_product` when creating/updating a `type: service_package`
+      product. The full `Product` shape may be included on read (with the extra
+      `service_package_product_quantity` field showing how many units of that service
+      are consumed per package).
+    required:
+      - id
+    properties:
+      id:
+        description: ID of the service product to include in the package.
+        type: string
+        format: uuid
+      service_package_product_quantity:
+        description: Quantity of this service consumed per package (write) / included per package (read).
+        type: integer
+        example: 1
 x-explorer-enabled: false
