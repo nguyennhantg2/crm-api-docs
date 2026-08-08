@@ -892,6 +892,12 @@ paths:
                           description: Product ID for the line item. `id` is accepted as an alias.
                           type: string
                           format: uuid
+                        variation_id:
+                          description: |
+                            Product variation ID (UUID). Links the line item to a specific SKU/variation
+                            of the product (see `ProductVariation.id` in the product catalog).
+                          type: string
+                          format: uuid
                         quantity:
                           description: Quantity ordered.
                           type: integer
@@ -1822,6 +1828,11 @@ definitions:
         format: uuid
       product_id:
         description: ID of the product for this line item.
+        type: string
+        format: uuid
+        nullable: true
+      variation_id:
+        description: ID of the product variation (SKU) for this line item, if applicable.
         type: string
         format: uuid
         nullable: true
