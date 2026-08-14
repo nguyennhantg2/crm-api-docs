@@ -3,7 +3,7 @@ info:
   title: Pancake CRM Internal Third Party API
   version: 1.0.0
   description: |
-    **Internal use only.** API for other Pancake products (Botcake, Webcake, Storecake…) to read and
+    **Internal use only.** API for other Pancake products (Pancake, Botcake, Webcake, Storecake…) to read and
     write CRM data on behalf of a connected page.
 
     Base URL: `https://crm.pancake.vn/api/internal_third_party`
@@ -24,6 +24,8 @@ security:
 tags:
   - name: Workspaces
     description: Resolve the CRM workspaces a page or user has access to
+  - name: Users
+    description: List the members of the workspace a page is connected to
   - name: Records
     description: Read and upsert records (lead, contact) of a connected page
   - name: Tickets
@@ -81,6 +83,61 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '403':
           $ref: '#/components/responses/Forbidden'
+
+  /users:
+    get:
+      summary: List workspace users
+      operationId: internalListUsers
+      tags:
+        - Users
+      description: |
+        Members of the workspace that `page_id` is connected to.
+
+        Use the returned `user_id` values for `assignee_ids`, `owner` and the `user_id` param of the
+        other endpoints.
+      x-codeSamples:
+        - lang: bash
+          label: cURL
+          source: |
+            curl -G 'https://crm.pancake.vn/api/internal_third_party/users' \
+              -H 'Authorization: Bearer <secret_key>' \
+              --data-urlencode 'page_id=104943019063372'
+      parameters:
+        - $ref: '#/components/parameters/PageIdQuery'
+      responses:
+        '200':
+          description: Workspace members returned
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  fallback:
+                    type: string
+                    example: with_data
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserWorkspace'
+              example:
+                success: true
+                fallback: with_data
+                data:
+                  - id: 8b5f2c19-64a1-4f2e-9f6d-1c0b7a3e5d42
+                    user_id: 4db4c09e-5fb6-47e7-a4d9-3ad49110155d
+                    workspace_id: 123
+                    user:
+                      id: 4db4c09e-5fb6-47e7-a4d9-3ad49110155d
+                      name: Nguyễn Văn A
+                      fb_id: '100012345678901'
+                      avatar_url: 'https://content.pancake.vn/avatar.jpg'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntity'
 
   '/{third_party}/{page_id}/records':
     get:
@@ -413,8 +470,9 @@ components:
       in: query
       required: true
       description: |
-        ID of a page connected to a CRM workspace. When provided, only that page's workspace is
-        returned. Leave it empty when querying by `user_id`.
+        ID of a page connected to a CRM workspace — it resolves which workspace the request reads
+        from. On [List workspaces](#/operations/internalListWorkspaces) only, it may be left empty
+        when querying by `user_id`.
       schema:
         type: string
         default: '104943019063372'
@@ -536,6 +594,10 @@ components:
               value:
                 success: false
                 message: Page is not connected to any workspace
+            workspace_not_found:
+              value:
+                success: false
+                message: Workspace not found
             missing_table_name:
               value:
                 success: false
@@ -602,6 +664,47 @@ components:
                 type: array
                 items:
                   type: object
+
+    UserWorkspace:
+      title: UserWorkspace
+      type: object
+      description: A user's membership in a workspace.
+      properties:
+        id:
+          description: ID of the user workspace.
+          type: string
+          format: uuid
+          example: 8b5f2c19-64a1-4f2e-9f6d-1c0b7a3e5d42
+        user_id:
+          description: ID of the user — use it to assign tickets/tasks (`assignee_ids`) or own records (`owner`).
+          type: string
+          format: uuid
+          example: 4db4c09e-5fb6-47e7-a4d9-3ad49110155d
+        workspace_id:
+          description: ID of the workspace the page is connected to.
+          type: integer
+          example: 123
+        user:
+          description: Public profile of the user.
+          type: object
+          properties:
+            id:
+              description: Same value as `user_id`.
+              type: string
+              format: uuid
+              example: 4db4c09e-5fb6-47e7-a4d9-3ad49110155d
+            name:
+              type: string
+              example: Nguyễn Văn A
+            fb_id:
+              description: Facebook ID of the user, when the account is linked.
+              type: string
+              nullable: true
+              example: '100012345678901'
+            avatar_url:
+              type: string
+              nullable: true
+              example: 'https://content.pancake.vn/avatar.jpg'
 
     Record:
       title: Record

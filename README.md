@@ -42,10 +42,11 @@ Pancake CRM can push record change events to your HTTP endpoint in real-time. Se
 
 ## Internal Third Party
 
-Internal API used by other Pancake products (Botcake, Webcake, Storecake…) to read and write CRM data on behalf of a connected page. Each third party is registered with its own **secret key** (`Authorization: Bearer <secret_key>`) — not a workspace `api_key` — and calls its own path scope.
+Internal API used by other Pancake products (Pancake, Botcake, Webcake, Storecake…) to read and write CRM data on behalf of a connected page. Each third party is registered with its own **secret key** (`Authorization: Bearer <secret_key>`) — not a workspace `api_key` — and calls its own path scope.
 
 - Base URL: `/api/internal_third_party`
 - `GET /workspaces` — Resolve workspaces of a page or user (with table metadata)
+- `GET /users` — List members of the workspace a page is connected to
 - `GET/POST /{third_party}/{page_id}/records` — List/get records by `psid`, upsert records
 - `POST /{third_party}/{page_id}/tickets` — Create ticket linked to a contact
 - `POST /{third_party}/{page_id}/tasks` — Create task
