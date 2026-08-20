@@ -208,6 +208,14 @@ parameters:
     type: string
     format: uuid
 
+  DealId:
+    description: The deal ID (UUID).
+    in: path
+    name: id
+    required: true
+    type: string
+    format: uuid
+
   Page:
     description: Page number for pagination (1-based).
     in: query
@@ -227,14 +235,18 @@ parameters:
 tags:
   - description: Manage records in a table
     name: Records
+  - description: Manage deals (sales opportunities) in a workspace
+    name: Deals
   - description: Manage tickets (tasks, issues, work items) in a workspace
     name: Tickets
   - description: Manage orders (sales orders and their line items) in a workspace
     name: Orders
-  - description: Manage lead sources in a workspace
-    name: Sources
   - description: Manage products in a workspace
     name: Products
+  - description: Manage lead sources in a workspace
+    name: Sources
+  - description: Manage record classification labels in a workspace
+    name: PancakeTags
 
 paths:
   '/workspaces/{workspace_id}/{table_name}/records':
@@ -396,31 +408,38 @@ paths:
       tags:
         - Records
 
-  '/workspaces/{workspace_id}/products':
+  '/workspaces/{workspace_id}/deals':
     get:
-      description: |
-        List products in a workspace, most recent first.
-
-        By default each product variation is expanded into its own entry in `entries`
-        (the variation's `id`, `custom_id`, `retail_price`, `import_price`,
-        `remain_quantity`, `images` and `sort_variation_attributes` override the parent
-        product's, and `product_id` points back to the parent). Pass `show_products=true`
-        to return the parent products with their `variations` array instead of the flattened form.
-
-        When `get_info=true` the response `data` is a paginated envelope
-        (`entries`, `page_number`, `page_size`, `total_entries`, `total_pages`).
-        Otherwise `data` is just the entries array.
-      operationId: listProducts
+      description: List deals in a workspace, most recent first.
+      operationId: listDeals
       parameters:
         - $ref: '#/parameters/WorkspaceId'
         - $ref: '#/parameters/Page'
         - $ref: '#/parameters/PageSize'
-        - name: search
+        - name: view
           in: query
           type: string
           required: false
-          description: Free-text search. Matches product `name` or `custom_id` (case-insensitive).
-        - name: ids
+          enum:
+            - kanban
+          description: |
+            When `kanban`, group the result by deal status (see the response description).
+            `page` / `page_size` then apply to each status group.
+        - name: filter
+          in: query
+          type: string
+          required: false
+          example: '{"search_all":"0972273341"}'
+          description: |
+            JSON-encoded filter object. Shape:
+
+            ```json
+            { "search_all": "0972273341" }
+            ```
+
+            - `search_all` (string): matches the deal `name`. When the value looks like a
+              phone number, it also matches the phone number of the linked `contact` / `account`.
+        - name: 'ids[]'
           in: query
           type: array
           collectionFormat: multi
@@ -428,21 +447,46 @@ paths:
             type: string
             format: uuid
           required: false
-          description: Restrict the result to products whose `id` is in this list.
-        - name: type
+          description: Restrict the result to deals whose `id` is in this list.
+        - name: 'status[]'
+          in: query
+          type: array
+          collectionFormat: multi
+          items:
+            type: string
+            format: uuid
+          required: false
+          description: Filter by status ID. See [List statuses](#/operations/listModuleStatuses).
+        - name: 'success_rate[]'
+          in: query
+          type: array
+          collectionFormat: multi
+          items:
+            type: string
+          required: false
+          description: 'Filter by success rate. One or more of `0%`, `10%`, `25%`, `50%`, `75%`, `100%`.'
+        - name: 'type[]'
           in: query
           type: array
           collectionFormat: multi
           items:
             type: string
             enum:
-              - product
-              - service
-              - service_package
+              - new_customer
+              - returning_customer
+          required: false
+          description: Filter by opportunity type.
+        - name: 'owner[]'
+          in: query
+          type: array
+          collectionFormat: multi
+          items:
+            type: string
           required: false
           description: |
-            Filter by product `type`. Accepts one or more of `product`, `service`, `service_package`.
-        - name: category_ids
+            Return only deals whose `assignee` or `related_owner` matches one of these user IDs.
+            Pass the single value `null` to return unassigned deals instead.
+        - name: 'created_by[]'
           in: query
           type: array
           collectionFormat: multi
@@ -450,59 +494,46 @@ paths:
             type: string
             format: uuid
           required: false
-          description: Return only products that belong to at least one of these categories.
-        - name: filter
+          description: Filter by the user who created the deal (`creator_id`).
+        - name: 'closed_reason[]'
+          in: query
+          type: array
+          collectionFormat: multi
+          items:
+            type: string
+          required: false
+          description: Return deals whose `closed_reason` contains at least one of these values.
+        - name: contact_id
+          in: query
+          type: string
+          format: uuid
+          required: false
+          description: Return only deals linked to this contact record.
+        - name: created_on
           in: query
           type: string
           required: false
-          example: '{"fields":[]}'
+          example: thisMonth
           description: |
-            JSON-encoded structured filter. Shape:
-
-            ```json
-            {
-              "fields": [
-                { "field_name": "retail_price", "type": "$greater_than", "value": 100000 },
-                { "field_name": "type", "value": ["product"], "is_filter_exclude": false }
-              ]
-            }
-            ```
-
-            Supported `field_name` values: `type`, `category_ids`, `retail_price`,
-            `import_price`, `remain_quantity`, `duration`, `images`.
-            Supported comparison `type` values: `$greater_than`, `$less_than`,
-            `$having_value`, `$having_no_value`. Omit `type` for an equality match
-            (respecting `is_filter_exclude`).
-        - name: show_products
+            Filter by creation date using a preset range, resolved in the workspace timezone.
+            Accepts `today`, `yesterday`, `tomorrow`, `thisWeek`, `lastWeek`, `nextWeek`,
+            `thirtyDaysAgo`, `thisMonth`, `monthAgo`, `nextMonth`.
+        - name: view_id
           in: query
           type: string
           required: false
           enum:
-            - "true"
-            - "false"
+            - due_at
           description: |
-            When `"true"`, return parent products with a nested `variations` array.
-            When omitted or `"false"` (default), each variation is expanded into its
-            own entry (flattened view).
-        - name: get_info
-          in: query
-          type: boolean
-          required: false
-          description: When `true`, wrap `data` in a paginated envelope with `total_entries` and `total_pages`.
-        - name: module
-          in: query
-          type: string
-          required: false
-          description: |
-            Optional module hint used by workspace-specific overrides
-            (e.g. `calendar` on the POS-Sale workspace ignores the `type` filter).
+            When `due_at`, return only overdue deals — `due_date` in the past and the deal
+            not yet in the `system.success` status.
       responses:
         '200':
-          description: Products returned
+          description: Deals returned
           schema:
-            title: Products List
+            title: Deals List
             type: object
-            description: Products list response
+            description: Paginated deals list response
             properties:
               success:
                 description: Indicates whether the request was successful
@@ -511,156 +542,506 @@ paths:
                 type: string
                 example: "with_data"
               data:
+                type: object
                 description: |
-                  When `get_info=true`, a paginated envelope. Otherwise the entries array directly.
-                oneOf:
-                  - type: array
+                  Paginated payload. When `view=kanban`, `data` is instead an object keyed by
+                  status ID whose values have this same shape plus a `total_revenue` integer.
+                properties:
+                  entries:
+                    description: List of deal objects
+                    type: array
                     items:
-                      $ref: '#/definitions/Product'
-                  - type: object
-                    properties:
-                      entries:
-                        type: array
-                        items:
-                          $ref: '#/definitions/Product'
-                      page_number:
-                        type: integer
-                        example: 1
-                      page_size:
-                        type: integer
-                        example: 30
-                      total_entries:
-                        type: integer
-                        example: 42
-                      total_pages:
-                        type: integer
-                        example: 2
-      summary: List products
+                      $ref: '#/definitions/Deal'
+                  page_number:
+                    type: integer
+                    example: 1
+                  page_size:
+                    type: integer
+                    example: 30
+                  total_entries:
+                    type: integer
+                    example: 84
+                  total_pages:
+                    type: integer
+                    example: 3
+      summary: List deals
       tags:
-        - Products
+        - Deals
     post:
       description: |
-        Create a new product in the workspace.
+        Create a new deal in the workspace.
 
-        `type` defaults to `product` when omitted. Type-specific fields are stripped
-        server-side: `service` drops `remain_quantity`, `service_package` drops
-        `remain_quantity` and `duration`, and only `service_package` keeps
-        `service_package_product`. Provide `variations` to create product variations
-        in the same request; provide `service_package_product` (for `type: service_package`)
-        to link component services with their quantities.
-      operationId: createProduct
+        The payload must be wrapped in a `deal` object. Link the deal to an existing contact
+        or account by sending its record `id` in `contact` / `account`.
+      operationId: createDeal
       parameters:
         - $ref: '#/parameters/WorkspaceId'
-        - description: Product payload
-          in: body
-          name: body
-          required: true
-          schema:
-            $ref: '#/definitions/Product'
-      responses:
-        '200':
-          description: Product created successfully
-          schema:
-            title: Product Create Response
-            type: object
-            properties:
-              success:
-                type: boolean
-              data:
-                $ref: '#/definitions/Product'
-        '422':
-          description: Invalid product payload (validation failed or duplicate `custom_id`).
-          schema:
-            title: Error Response
-            type: object
-            properties:
-              success:
-                type: boolean
-              message_code:
-                type: string
-                enum:
-                  - unique_custom_id
-                  - unknown_error
-      summary: Create product
-      tags:
-        - Products
-
-  '/workspaces/{workspace_id}/products/{id}':
-    get:
-      description: Retrieve a single product by ID.
-      operationId: getProduct
-      parameters:
-        - $ref: '#/parameters/WorkspaceId'
-        - $ref: '#/parameters/ProductId'
-      responses:
-        '200':
-          description: Product returned
-          schema:
-            title: Product Response
-            type: object
-            properties:
-              success:
-                type: boolean
-              data:
-                $ref: '#/definitions/Product'
-        '404':
-          description: Product not found
-      summary: Get product
-      tags:
-        - Products
-    put:
-      description: |
-        Update an existing product. The body must be wrapped in a `data` object and
-        `data.id` must match the product to update (the same ID as in the URL).
-
-        Passing `variations` replaces the product's variations: existing variations
-        whose `custom_id` is not in the new list are deleted, matches are updated,
-        and new entries are inserted. Passing `service_package_product` (only valid
-        for `type: service_package`) fully replaces the linked service list.
-      operationId: updateProduct
-      parameters:
-        - $ref: '#/parameters/WorkspaceId'
-        - $ref: '#/parameters/ProductId'
-        - description: Product update payload
+        - description: Deal body
           in: body
           name: body
           required: true
           schema:
             type: object
             required:
-              - data
+              - deal
             properties:
-              data:
-                $ref: '#/definitions/Product'
+              deal: &DealInputSchema
+                title: Deal Input
+                type: object
+                description: |
+                  Writable deal payload (sent as the `deal` field of the request body), used for
+                  both create and update. Server-managed fields (`id`, `display_id`, `creator_id`,
+                  `workspace_id`, timestamps) are ignored. On update, omitted fields are left
+                  untouched.
+                required:
+                  - name
+                properties:
+                  name:
+                    description: Deal name.
+                    type: string
+                    example: "Cơ hội bán gói phần mềm CRM"
+                  account:
+                    description: |
+                      Account record to link to the deal — only `id` is read, any other field is ignored.
+                      See [List records](#/operations/records).
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        example: "7b2f9e14-5d63-4c8a-9f10-2a4d6e8b3c57"
+                  contact:
+                    description: |
+                      Contact record to link to the deal — only `id` is read, any other field is ignored.
+                      See [List records](#/operations/records).
+                    type: object
+                    properties:
+                      id:
+                        type: string
+                        format: uuid
+                        example: "0c1649c6-2297-4835-9a68-8fdd1d348d8b"
+                  status:
+                    description: Status ID of the deal. See [List statuses](#/operations/listModuleStatuses).
+                    type: string
+                    format: uuid
+                    example: "5f8f2e0a-1c3d-4a52-9b41-7c0c1a6e91d2"
+                  success_rate:
+                    description: Estimated probability of winning the deal.
+                    type: string
+                    enum:
+                      - "0%"
+                      - "10%"
+                      - "25%"
+                      - "50%"
+                      - "75%"
+                      - "100%"
+                    example: "50%"
+                  type:
+                    description: Opportunity type.
+                    type: string
+                    enum:
+                      - new_customer
+                      - returning_customer
+                    example: "new_customer"
+                  source:
+                    description: |
+                      Source IDs the deal is attributed to.
+                      [Source schema](#/schemas/Source)
+                    type: array
+                    items:
+                      type: string
+                    example: ["-11"]
+                  assignee:
+                    description: |
+                      ID of the user in charge of the deal.
+                      Defaults to the caller when omitted on create.
+                    type: string
+                    format: uuid
+                    example: "4db4c09e-5fb6-47e7-a4d9-3ad49110155d"
+                  related_owner:
+                    description: IDs of the other users following this deal.
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                  due_date:
+                    description: Expected closing date of the deal.
+                    type: string
+                    format: date-time
+                    example: "2026-03-15T09:00:00.000Z"
+                  revenue:
+                    description: Expected revenue of the deal.
+                    type: integer
+                    example: 1500000
+                  note:
+                    description: Free-text note about the deal.
+                    type: string
+                  product_ids:
+                    description: IDs of the products quoted in this deal.
+                    type: array
+                    items:
+                      type: string
+                      format: uuid
+                  extra_info:
+                    description: |
+                      Dynamic custom fields. Also stores the quotation built in the UI:
+                      `products` (line items `{ id, price, quantity, discount }`),
+                      `discounts` and `surcharges`.
+                    type: object
+                    additionalProperties: true
+                  closed_reason:
+                    description: Reasons recorded when the deal is closed (typically when lost).
+                    type: array
+                    items:
+                      type: string
+                    example: ["Giá cao hơn đối thủ"]
+                  is_removed:
+                    description: Set to `true` to soft-delete the deal.
+                    type: boolean
+                    default: false
       responses:
         '200':
-          description: Product updated successfully
+          description: Deal created successfully
           schema:
-            title: Product Update Response
+            title: Deal Create Response
             type: object
+            description: Response object after creating a deal
             properties:
               success:
+                description: Indicates whether the create operation was successful
                 type: boolean
               data:
-                $ref: '#/definitions/Product'
-        '404':
-          description: Product not found
+                description: The created deal object
+                $ref: '#/definitions/Deal'
         '422':
-          description: Invalid product payload (validation failed or duplicate `custom_id`).
+          description: Invalid deal payload
           schema:
             title: Error Response
             type: object
             properties:
               success:
                 type: boolean
-              message_code:
+              message:
                 type: string
-                enum:
-                  - unique_custom_id
-                  - unknown_error
-      summary: Update product
+      summary: Create deal
       tags:
-        - Products
+        - Deals
+
+  '/workspaces/{workspace_id}/deals/{id}':
+    get:
+      description: Retrieve a deal by ID.
+      operationId: getDeal
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/DealId'
+      responses:
+        '200':
+          description: Deal returned
+          schema:
+            title: Deal Response
+            type: object
+            description: Single deal response
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              data:
+                description: The deal object, or `null` when not found or not visible to the caller.
+                $ref: '#/definitions/Deal'
+      summary: Get deal
+      tags:
+        - Deals
+    put:
+      description: |
+        Update an existing deal by ID. Only the fields present in the `deal` object are changed.
+
+        A deal that already sits in the `system.success` or `system.failure` status can no
+        longer be updated — the request fails with `422` unless it only sets `is_removed`.
+
+        **There is no delete endpoint — soft-delete a deal by sending `is_removed: true`.**
+      operationId: updateDeal
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/DealId'
+        - description: Deal fields to update
+          in: body
+          name: body
+          required: true
+          schema:
+            type: object
+            required:
+              - deal
+            properties:
+              deal: *DealInputSchema
+      responses:
+        '200':
+          description: Deal updated successfully
+          schema:
+            title: Deal Update Response
+            type: object
+            description: Response object after updating a deal
+            properties:
+              success:
+                description: Indicates whether the update operation was successful
+                type: boolean
+              data:
+                description: The updated deal object
+                $ref: '#/definitions/Deal'
+        '403':
+          description: "Forbidden, insufficient permissions"
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+        '422':
+          description: Invalid payload, or the deal is already closed (success/failure)
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+      summary: Update deal
+      tags:
+        - Deals
+
+  '/workspaces/{workspace_id}/module_statuses':
+    get:
+      description: |
+        List the pipeline statuses configured in a workspace, ordered by `position`.
+
+        Statuses are workspace-specific: use this endpoint to resolve the `status` UUID of a
+        deal before filtering or writing it. Filter by `table_id=deals` to get only the
+        deal pipeline.
+      operationId: listModuleStatuses
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - name: table_id
+          in: query
+          type: string
+          required: false
+          example: deals
+          description: |
+            Return only the statuses of this module (e.g. `deals`, `task`, `calendar`, `rating`).
+            Omit to return every status in the workspace.
+      responses:
+        '200':
+          description: Statuses returned
+          schema:
+            title: Module Status List
+            type: object
+            description: Module status list response
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              data:
+                description: List of status objects
+                type: array
+                items:
+                  $ref: '#/definitions/ModuleStatus'
+      summary: List statuses
+      tags:
+        - Deals
+
+  '/workspaces/{workspace_id}/tickets':
+    get:
+      description: List all the tickets in a workspace.
+      operationId: listTickets
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/Cursor'
+      responses:
+        '200':
+          description: Tickets returned
+          schema:
+            title: Tickets List
+            type: object
+            description: Tickets list response
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              entries:
+                description: List of ticket objects
+                items:
+                  $ref: '#/definitions/Ticket'
+                type: array
+      summary: List tickets
+      tags:
+        - Tickets
+    post:
+      description: |
+        Create a new ticket in the workspace.
+
+        Each ticket must be linked to a contact.
+      operationId: createTicket
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - description: Ticket body
+          in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/Ticket'
+      responses:
+        '200':
+          description: Ticket created successfully
+          schema:
+            title: Ticket Create Response
+            type: object
+            description: Response object after creating a ticket
+            properties:
+              success:
+                description: Indicates whether the create operation was successful
+                type: boolean
+              data:
+                description: The created ticket object
+                $ref: '#/definitions/Ticket'
+        '403':
+          description: "Forbidden, insufficient permissions"
+          schema:
+            title: Error Response
+            type: object
+            description: Error response object
+            properties:
+              success:
+                description: Always false for error responses
+                type: boolean
+              message:
+                type: object
+        '422':
+          description: "Invalid ticket payload"
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+      summary: Create ticket
+      tags:
+        - Tickets
+
+  '/workspaces/{workspace_id}/tickets/{ticket_id}':
+    get:
+      description: Retrieve a ticket by ID.
+      operationId: getTicket
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/TicketId'
+      responses:
+        '200':
+          description: Ticket returned
+          schema:
+            title: Ticket Response
+            type: object
+            description: Single ticket response
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              data:
+                description: The ticket object
+                $ref: '#/definitions/Ticket'
+        '404':
+          description: Ticket not found
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+      summary: Get ticket
+      tags:
+        - Tickets
+    put:
+      description: Update an existing ticket by ID. Only provided fields will be updated.
+      operationId: updateTicket
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/TicketId'
+        - description: Ticket fields to update
+          in: body
+          name: body
+          required: true
+          schema:
+            $ref: '#/definitions/Ticket'
+      responses:
+        '200':
+          description: Ticket updated successfully
+          schema:
+            title: Ticket Update Response
+            type: object
+            description: Response object after updating a ticket
+            properties:
+              success:
+                description: Indicates whether the update operation was successful
+                type: boolean
+              data:
+                description: The updated ticket object
+                $ref: '#/definitions/Ticket'
+        '403':
+          description: "Forbidden, insufficient permissions"
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: object
+        '404':
+          description: Ticket not found
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+      summary: Update ticket
+      tags:
+        - Tickets
+    delete:
+      description: Delete a ticket by ID.
+      operationId: deleteTicket
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/TicketId'
+      responses:
+        '200':
+          description: Ticket deleted successfully
+          schema:
+            title: Ticket Delete Response
+            type: object
+            properties:
+              success:
+                type: boolean
+                description: Indicates whether the delete operation was successful
+        '404':
+          description: Ticket not found
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                type: boolean
+              message:
+                type: string
+      summary: Delete ticket
+      tags:
+        - Tickets
 
   '/workspaces/{workspace_id}/orders':
     get:
@@ -1088,198 +1469,271 @@ paths:
       tags:
         - Orders
 
-  '/workspaces/{workspace_id}/tickets':
+  '/workspaces/{workspace_id}/products':
     get:
-      description: List all the tickets in a workspace.
-      operationId: listTickets
+      description: |
+        List products in a workspace, most recent first.
+
+        By default each product variation is expanded into its own entry in `entries`
+        (the variation's `id`, `custom_id`, `retail_price`, `import_price`,
+        `remain_quantity`, `images` and `sort_variation_attributes` override the parent
+        product's, and `product_id` points back to the parent). Pass `show_products=true`
+        to return the parent products with their `variations` array instead of the flattened form.
+
+        When `get_info=true` the response `data` is a paginated envelope
+        (`entries`, `page_number`, `page_size`, `total_entries`, `total_pages`).
+        Otherwise `data` is just the entries array.
+      operationId: listProducts
       parameters:
         - $ref: '#/parameters/WorkspaceId'
-        - $ref: '#/parameters/Cursor'
+        - $ref: '#/parameters/Page'
+        - $ref: '#/parameters/PageSize'
+        - name: search
+          in: query
+          type: string
+          required: false
+          description: Free-text search. Matches product `name` or `custom_id` (case-insensitive).
+        - name: ids
+          in: query
+          type: array
+          collectionFormat: multi
+          items:
+            type: string
+            format: uuid
+          required: false
+          description: Restrict the result to products whose `id` is in this list.
+        - name: type
+          in: query
+          type: array
+          collectionFormat: multi
+          items:
+            type: string
+            enum:
+              - product
+              - service
+              - service_package
+          required: false
+          description: |
+            Filter by product `type`. Accepts one or more of `product`, `service`, `service_package`.
+        - name: category_ids
+          in: query
+          type: array
+          collectionFormat: multi
+          items:
+            type: string
+            format: uuid
+          required: false
+          description: Return only products that belong to at least one of these categories.
+        - name: filter
+          in: query
+          type: string
+          required: false
+          example: '{"fields":[]}'
+          description: |
+            JSON-encoded structured filter. Shape:
+
+            ```json
+            {
+              "fields": [
+                { "field_name": "retail_price", "type": "$greater_than", "value": 100000 },
+                { "field_name": "type", "value": ["product"], "is_filter_exclude": false }
+              ]
+            }
+            ```
+
+            Supported `field_name` values: `type`, `category_ids`, `retail_price`,
+            `import_price`, `remain_quantity`, `duration`, `images`.
+            Supported comparison `type` values: `$greater_than`, `$less_than`,
+            `$having_value`, `$having_no_value`. Omit `type` for an equality match
+            (respecting `is_filter_exclude`).
+        - name: show_products
+          in: query
+          type: string
+          required: false
+          enum:
+            - "true"
+            - "false"
+          description: |
+            When `"true"`, return parent products with a nested `variations` array.
+            When omitted or `"false"` (default), each variation is expanded into its
+            own entry (flattened view).
+        - name: get_info
+          in: query
+          type: boolean
+          required: false
+          description: When `true`, wrap `data` in a paginated envelope with `total_entries` and `total_pages`.
+        - name: module
+          in: query
+          type: string
+          required: false
+          description: |
+            Optional module hint used by workspace-specific overrides
+            (e.g. `calendar` on the POS-Sale workspace ignores the `type` filter).
       responses:
         '200':
-          description: Tickets returned
+          description: Products returned
           schema:
-            title: Tickets List
+            title: Products List
             type: object
-            description: Tickets list response
+            description: Products list response
             properties:
               success:
                 description: Indicates whether the request was successful
                 type: boolean
-              entries:
-                description: List of ticket objects
-                items:
-                  $ref: '#/definitions/Ticket'
-                type: array
-      summary: List tickets
+              fallback:
+                type: string
+                example: "with_data"
+              data:
+                description: |
+                  When `get_info=true`, a paginated envelope. Otherwise the entries array directly.
+                oneOf:
+                  - type: array
+                    items:
+                      $ref: '#/definitions/Product'
+                  - type: object
+                    properties:
+                      entries:
+                        type: array
+                        items:
+                          $ref: '#/definitions/Product'
+                      page_number:
+                        type: integer
+                        example: 1
+                      page_size:
+                        type: integer
+                        example: 30
+                      total_entries:
+                        type: integer
+                        example: 42
+                      total_pages:
+                        type: integer
+                        example: 2
+      summary: List products
       tags:
-        - Tickets
+        - Products
     post:
       description: |
-        Create a new ticket in the workspace.
+        Create a new product in the workspace.
 
-        Each ticket must be linked to a contact.
-      operationId: createTicket
+        `type` defaults to `product` when omitted. Type-specific fields are stripped
+        server-side: `service` drops `remain_quantity`, `service_package` drops
+        `remain_quantity` and `duration`, and only `service_package` keeps
+        `service_package_product`. Provide `variations` to create product variations
+        in the same request; provide `service_package_product` (for `type: service_package`)
+        to link component services with their quantities.
+      operationId: createProduct
       parameters:
         - $ref: '#/parameters/WorkspaceId'
-        - description: Ticket body
+        - description: Product payload
           in: body
           name: body
           required: true
           schema:
-            $ref: '#/definitions/Ticket'
+            $ref: '#/definitions/Product'
       responses:
         '200':
-          description: Ticket created successfully
+          description: Product created successfully
           schema:
-            title: Ticket Create Response
+            title: Product Create Response
             type: object
-            description: Response object after creating a ticket
             properties:
               success:
-                description: Indicates whether the create operation was successful
                 type: boolean
               data:
-                description: The created ticket object
-                $ref: '#/definitions/Ticket'
-        '403':
-          description: "Forbidden, insufficient permissions"
-          schema:
-            title: Error Response
-            type: object
-            description: Error response object
-            properties:
-              success:
-                description: Always false for error responses
-                type: boolean
-              message:
-                type: object
+                $ref: '#/definitions/Product'
         '422':
-          description: "Invalid ticket payload"
+          description: Invalid product payload (validation failed or duplicate `custom_id`).
           schema:
             title: Error Response
             type: object
             properties:
               success:
                 type: boolean
-              message:
+              message_code:
                 type: string
-      summary: Create ticket
+                enum:
+                  - unique_custom_id
+                  - unknown_error
+      summary: Create product
       tags:
-        - Tickets
+        - Products
 
-  '/workspaces/{workspace_id}/tickets/{ticket_id}':
+  '/workspaces/{workspace_id}/products/{id}':
     get:
-      description: Retrieve a ticket by ID.
-      operationId: getTicket
+      description: Retrieve a single product by ID.
+      operationId: getProduct
       parameters:
         - $ref: '#/parameters/WorkspaceId'
-        - $ref: '#/parameters/TicketId'
+        - $ref: '#/parameters/ProductId'
       responses:
         '200':
-          description: Ticket returned
+          description: Product returned
           schema:
-            title: Ticket Response
+            title: Product Response
             type: object
-            description: Single ticket response
             properties:
               success:
-                description: Indicates whether the request was successful
                 type: boolean
               data:
-                description: The ticket object
-                $ref: '#/definitions/Ticket'
+                $ref: '#/definitions/Product'
         '404':
-          description: Ticket not found
-          schema:
-            title: Error Response
-            type: object
-            properties:
-              success:
-                type: boolean
-              message:
-                type: string
-      summary: Get ticket
+          description: Product not found
+      summary: Get product
       tags:
-        - Tickets
+        - Products
     put:
-      description: Update an existing ticket by ID. Only provided fields will be updated.
-      operationId: updateTicket
+      description: |
+        Update an existing product. The body must be wrapped in a `data` object and
+        `data.id` must match the product to update (the same ID as in the URL).
+
+        Passing `variations` replaces the product's variations: existing variations
+        whose `custom_id` is not in the new list are deleted, matches are updated,
+        and new entries are inserted. Passing `service_package_product` (only valid
+        for `type: service_package`) fully replaces the linked service list.
+      operationId: updateProduct
       parameters:
         - $ref: '#/parameters/WorkspaceId'
-        - $ref: '#/parameters/TicketId'
-        - description: Ticket fields to update
+        - $ref: '#/parameters/ProductId'
+        - description: Product update payload
           in: body
           name: body
           required: true
           schema:
-            $ref: '#/definitions/Ticket'
+            type: object
+            required:
+              - data
+            properties:
+              data:
+                $ref: '#/definitions/Product'
       responses:
         '200':
-          description: Ticket updated successfully
+          description: Product updated successfully
           schema:
-            title: Ticket Update Response
+            title: Product Update Response
             type: object
-            description: Response object after updating a ticket
             properties:
               success:
-                description: Indicates whether the update operation was successful
                 type: boolean
               data:
-                description: The updated ticket object
-                $ref: '#/definitions/Ticket'
-        '403':
-          description: "Forbidden, insufficient permissions"
-          schema:
-            title: Error Response
-            type: object
-            properties:
-              success:
-                type: boolean
-              message:
-                type: object
+                $ref: '#/definitions/Product'
         '404':
-          description: Ticket not found
+          description: Product not found
+        '422':
+          description: Invalid product payload (validation failed or duplicate `custom_id`).
           schema:
             title: Error Response
             type: object
             properties:
               success:
                 type: boolean
-              message:
+              message_code:
                 type: string
-      summary: Update ticket
+                enum:
+                  - unique_custom_id
+                  - unknown_error
+      summary: Update product
       tags:
-        - Tickets
-    delete:
-      description: Delete a ticket by ID.
-      operationId: deleteTicket
-      parameters:
-        - $ref: '#/parameters/WorkspaceId'
-        - $ref: '#/parameters/TicketId'
-      responses:
-        '200':
-          description: Ticket deleted successfully
-          schema:
-            title: Ticket Delete Response
-            type: object
-            properties:
-              success:
-                type: boolean
-                description: Indicates whether the delete operation was successful
-        '404':
-          description: Ticket not found
-          schema:
-            title: Error Response
-            type: object
-            properties:
-              success:
-                type: boolean
-              message:
-                type: string
-      summary: Delete ticket
-      tags:
-        - Tickets
+        - Products
 
   '/workspaces/{workspace_id}/sources':
     get:
@@ -1904,6 +2358,237 @@ definitions:
       updated_at:
         type: string
         format: date-time
+
+  Deal:
+    title: Deal
+    type: object
+    description: |
+      A deal (sales opportunity) belonging to a workspace. A deal tracks the expected
+      `revenue` of a sale, its position in the pipeline (`status`), the products quoted
+      (`product_ids` / `products`) and the customer it is linked to (`contact`, `account`)
+      through `record_relations`.
+
+      Monetary amounts are integers in the workspace currency's smallest practical unit
+      (for VND this is the dong, with no decimals).
+    properties:
+      id:
+        description: Unique identifier (UUID) of the deal.
+        type: string
+        format: uuid
+        example: "b20d47ba-cc24-421c-92f6-f59da03b0ce4"
+      workspace_id:
+        description: ID of the workspace the deal belongs to.
+        type: integer
+        example: 2
+      display_id:
+        description: Human-readable sequential ID of the deal within the workspace.
+        type: integer
+        example: 12
+      name:
+        description: Deal name.
+        type: string
+        example: "Cơ hội bán gói phần mềm CRM"
+      status:
+        description: |
+          Status ID of the deal, referencing a [module status](#/schemas/ModuleStatus)
+          with `table_id: deals`.
+        type: string
+        format: uuid
+        example: "5f8f2e0a-1c3d-4a52-9b41-7c0c1a6e91d2"
+      revenue:
+        description: Expected revenue of the deal.
+        type: integer
+        default: 0
+        example: 1500000
+      success_rate:
+        description: Estimated probability of winning the deal.
+        type: string
+        nullable: true
+        enum:
+          - "0%"
+          - "10%"
+          - "25%"
+          - "50%"
+          - "75%"
+          - "100%"
+        example: "50%"
+      type:
+        description: Opportunity type.
+        type: string
+        nullable: true
+        enum:
+          - new_customer
+          - returning_customer
+        example: "new_customer"
+      due_date:
+        description: Expected closing date of the deal.
+        type: string
+        format: date-time
+        nullable: true
+        example: "2026-03-15T09:00:00"
+      assignee:
+        description: ID of the user in charge of the deal.
+        type: string
+        format: uuid
+        nullable: true
+        example: "4db4c09e-5fb6-47e7-a4d9-3ad49110155d"
+      related_owner:
+        description: IDs of the other users following this deal.
+        type: array
+        nullable: true
+        items:
+          type: string
+          format: uuid
+      creator_id:
+        description: ID of the user who created the deal.
+        type: string
+        format: uuid
+        nullable: true
+      source:
+        description: |
+          Source IDs the deal is attributed to.
+          [Source schema](#/schemas/Source)
+        type: array
+        nullable: true
+        items:
+          type: string
+        example: ["-11"]
+      product_ids:
+        description: IDs of the products quoted in this deal.
+        type: array
+        nullable: true
+        items:
+          type: string
+          format: uuid
+      products:
+        description: The products referenced by `product_ids`, resolved server-side.
+        type: array
+        items:
+          $ref: '#/definitions/Product'
+      closed_reason:
+        description: Reasons recorded when the deal was closed.
+        type: array
+        items:
+          type: string
+        example: ["Giá cao hơn đối thủ"]
+      note:
+        description: Free-text note about the deal.
+        type: string
+        nullable: true
+      extra_info:
+        description: |
+          Dynamic custom fields. Also stores the quotation built in the UI:
+          `products` (line items `{ id, price, quantity, discount }`),
+          `discounts` and `surcharges`.
+        type: object
+        additionalProperties: true
+        nullable: true
+      contact:
+        description: The linked contact record, resolved from `record_relations`.
+        type: array
+        nullable: true
+        items:
+          $ref: '#/definitions/Record'
+      account:
+        description: The linked account record, resolved from `record_relations`.
+        type: array
+        nullable: true
+        items:
+          $ref: '#/definitions/Record'
+      phone_number:
+        description: Phone number of the linked contact/account, for convenience.
+        type: string
+        nullable: true
+        example: "0972273341"
+      record_relations:
+        description: |
+          Records linked to this deal (the related `contact` and `account`).
+          Each relation embeds the resolved `record` object when available.
+        type: array
+        items:
+          type: object
+          properties:
+            table_name:
+              type: string
+              example: "contact"
+            type:
+              type: string
+              example: "deals"
+            record_id:
+              type: string
+            related_id:
+              type: string
+            record:
+              type: object
+              additionalProperties: true
+              nullable: true
+      is_removed:
+        description: Whether the deal has been soft-deleted.
+        type: boolean
+        default: false
+        example: false
+      inserted_at:
+        description: The date and time when the deal was created.
+        type: string
+        format: date-time
+        example: "2026-02-04T10:14:32.683430"
+      updated_at:
+        description: The date and time when the deal was last updated.
+        type: string
+        format: date-time
+        example: "2026-02-04T10:14:32.683430"
+    required:
+      - name
+
+  ModuleStatus:
+    title: Module Status
+    type: object
+    description: |
+      A status in a module's pipeline (deals, task, calendar, rating…). Statuses are
+      created per workspace, so their IDs differ between workspaces.
+
+      A new workspace starts with these deal statuses, in order: `system.new`,
+      `system.introduce`, `system.negotiate`, `system.priceQuote`, `system.success`,
+      `system.failure`. `system.success` and `system.failure` are terminal — a deal in
+      either can no longer be updated.
+    properties:
+      id:
+        description: Unique identifier (UUID) of the status. This is the value stored in `Deal.status`.
+        type: string
+        format: uuid
+        example: "5f8f2e0a-1c3d-4a52-9b41-7c0c1a6e91d2"
+      workspace_id:
+        type: integer
+        example: 2
+      table_id:
+        description: Module the status belongs to.
+        type: string
+        example: "deals"
+      name:
+        description: |
+          Internal name of the status. Built-in statuses use a `system.*` key;
+          user-created ones use their own label.
+        type: string
+        example: "system.negotiate"
+      value:
+        description: Display label of the status, translated to the caller's locale.
+        type: string
+        example: "Đàm phán"
+      color:
+        description: Status color in HEX format.
+        type: string
+        example: "#05AABD"
+      position:
+        description: Ordering of the status within the pipeline (ascending).
+        type: integer
+        example: 2
+      is_default:
+        description: Whether the status is a built-in one that cannot be renamed or deleted.
+        type: boolean
+        example: false
+      is_removed:
+        type: boolean
+        default: false
 
   Source:
     type: object

@@ -1,6 +1,6 @@
 # Pancake CRM API Documentation
 
-RESTful API documentation for Pancake CRM, including record management, order management, product management, sources, pancake tags, and webhook events.
+RESTful API documentation for Pancake CRM, including record management, deal management, order management, product management, sources, pancake tags, and webhook events.
 
 - **Version**: 2.0.0
 - **Base URL**: `https://crm.pancake.vn/api`
@@ -9,6 +9,7 @@ RESTful API documentation for Pancake CRM, including record management, order ma
 ## Key Features
 
 - Record management (list, get, upsert, delete) — supports lead, account, and contact tables
+- Deal management (list, get, create, update) — sales opportunities with pipeline statuses
 - Order management (list, get, create, update) — sales orders with line items
 - Product management (list, create, update)
 - Customer sources
@@ -20,6 +21,12 @@ RESTful API documentation for Pancake CRM, including record management, order ma
 **Records**
 - `GET/POST/DELETE /workspaces/{workspace_id}/{table_name}/records` — Record CRUD (lead, account, contact)
 - `GET /workspaces/{workspace_id}/record/{record_id}` — Get a single record
+
+**Deals**
+- `GET /workspaces/{workspace_id}/deals` — List deals (paginated, `view=kanban` groups by status)
+- `POST /workspaces/{workspace_id}/deals` — Create deal
+- `GET /workspaces/{workspace_id}/deals/{id}` — Get a single deal
+- `PUT /workspaces/{workspace_id}/deals/{id}` — Update deal (soft-delete with `is_removed: true`)
 
 **Orders**
 - `GET /workspaces/{workspace_id}/orders` — List orders (paginated)
@@ -35,6 +42,7 @@ RESTful API documentation for Pancake CRM, including record management, order ma
 **Metadata**
 - `GET /workspaces/{workspace_id}/sources` — List customer sources
 - `GET /workspaces/{workspace_id}/pancake_tags` — List pancake tags
+- `GET /workspaces/{workspace_id}/module_statuses` — List pipeline statuses (`table_id=deals` for the deal pipeline)
 
 ## Webhooks
 
