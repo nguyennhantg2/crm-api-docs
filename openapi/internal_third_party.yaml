@@ -810,6 +810,15 @@ components:
         email:
           description: Record owner email.
           type: string
+        status:
+          description: |
+            Status of the record. Send the option's `id`, taken from the `status` field's
+            `select_options` — see [Field](#/schemas/Field).
+
+            Cannot be set to `converted` on a `lead` or `merged` on a `contact`, and a record
+            already in one of those statuses can no longer be updated.
+          type: string
+          example: contacted
         birthday:
           description: The customer's/lead's date of birth (ISO 8601 format).
           type: string
