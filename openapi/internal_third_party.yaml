@@ -61,6 +61,7 @@ paths:
       parameters:
         - $ref: '#/components/parameters/PageIdQuery'
         - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/Locale'
       responses:
         '200':
           description: Workspace list returned
@@ -488,6 +489,18 @@ components:
         format: uuid
       example: 4db4c09e-5fb6-47e7-a4d9-3ad49110155d
 
+    Locale:
+      name: locale
+      in: query
+      required: false
+      description: |
+        Language of the `label` / `value` texts in the response.
+        Falls back to the requesting user's language, then `vi`.
+      schema:
+        type: string
+        enum: [vi, en, th, id, lo, es, pt]
+      example: vi
+
     TableNameQuery:
       name: table_name
       in: query
@@ -644,26 +657,96 @@ components:
           description: Tables of the workspace.
           type: array
           items:
+            $ref: '#/components/schemas/Table'
+
+    Table:
+      title: Table
+      type: object
+      description: |
+        A table of the workspace. Third parties get a trimmed view: fields are not listed at the
+        table level, they are grouped under `sections`.
+      properties:
+        name:
+          description: Machine name of the table, used as `table_name` in the other endpoints.
+          type: string
+          example: contact
+        label:
+          description: Display label of the table.
+          type: string
+          example: Liên hệ
+        sections:
+          description: Field groups of the table, in display order.
+          type: array
+          items:
+            $ref: '#/components/schemas/Section'
+
+    Section:
+      title: Section
+      type: object
+      description: A group of fields inside a table.
+      properties:
+        name:
+          description: Machine name of the section.
+          type: string
+          example: general_information
+        label:
+          description: Display label of the section.
+          type: string
+          example: Thông tin chung
+        fields:
+          description: Fields belonging to this section, in display order.
+          type: array
+          items:
+            $ref: '#/components/schemas/Field'
+
+    Field:
+      title: Field
+      type: object
+      description: |
+        A field definition. Use `name` as the key when sending the field in a record payload.
+      properties:
+        id:
+          description: Unique identifier (UUID) of the field.
+          type: string
+          format: uuid
+          example: 3a5b1b0e-88bd-4d34-9a4b-2c4f4be21f38
+        name:
+          description: Machine name of the field — the key to use in a record payload.
+          type: string
+          example: phone_number
+        label:
+          description: Display label of the field, translated to the requested `locale`.
+          type: string
+          example: Số điện thoại
+        is_require:
+          description: Whether the field must be filled when creating or updating a record.
+          type: boolean
+          default: false
+        select_options:
+          description: |
+            Allowed values, present only for select-type fields (`null` for every other type).
+            Send the option's `id` as the field value.
+          type: array
+          nullable: true
+          items:
             type: object
             properties:
-              name:
-                description: Machine name of the table, used as `table_name` in other endpoints.
+              id:
+                description: Stable key of the option — this is the value stored on the record.
                 type: string
-                example: contact
-              label:
-                description: Display label of the table.
+                example: contacted
+              value:
+                description: Display label of the option, translated to the requested `locale`.
                 type: string
-                example: Liên hệ
-              fields:
-                description: Field definitions of the table, including custom fields and their select options.
-                type: array
-                items:
-                  type: object
-              sections:
-                description: Section (field group) definitions of the table.
-                type: array
-                items:
-                  type: object
+                example: Đã liên hệ
+              color:
+                description: Background color of the option tag, in HEX.
+                type: string
+                example: '#F6900A'
+              txtColor:
+                description: Text color of the option tag, in HEX.
+                type: string
+                example: '#FFFFFF'
 
     UserWorkspace:
       title: UserWorkspace
@@ -711,7 +794,7 @@ components:
       type: object
       description: |
         A record in the `lead` or `contact` table. Beyond the system fields below, a record also carries
-        the workspace's custom fields — see `tables[].fields` from
+        the workspace's custom fields — see `tables[].sections[].fields` from
         [List workspaces](#/operations/internalListWorkspaces).
       properties:
         id:
