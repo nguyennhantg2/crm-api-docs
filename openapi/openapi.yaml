@@ -1857,13 +1857,7 @@ paths:
         Create a custom audience file: a saved segment of records from one table
         (`lead` / `account` / `contact`), described by the filter in `settings.filter`.
 
-        The members of the file are resolved asynchronously after this call returns, so the
-        response contains `settings.is_init_customers: true` and no members yet. Poll
-        `GET /workspaces/{workspace_id}/audiences` until the audience's `is_init_customers` is
-        `false` to know the build has finished.
-
-        Link the file to an ad account with
-        `POST /workspaces/{workspace_id}/audiences/{audience_id}/platform_bindings`.
+        Link the file to an ad account with **Link audience to an ad account**.
       operationId: createAudience
       parameters:
         - $ref: '#/parameters/WorkspaceId'
@@ -2005,18 +1999,16 @@ paths:
         Link a custom audience file to an advertising ad account, so its members are pushed to
         that platform as a custom audience.
 
-        `ad_account_id` must be an ad account already connected to the workspace — use the id
-        returned by `GET /workspaces/{workspace_id}/audiences/ad_accounts/fb` (or
-        `.../ad_accounts/tiktok`) exactly as given.
+        `ad_account_id` must be an ad account already connected to the workspace — use an id
+        from **List Facebook ad accounts** or **List TikTok ad accounts** exactly as given.
 
         `external_audience_id` decides whether an audience is created or reused:
         - `"add_audience"` — create a brand new custom audience on the platform and bind to it.
           For `fb` the audience is created immediately (the response carries the real Facebook
           custom audience id). For `tiktok` creation is deferred to the sync worker, so the
           stored value stays `"add_audience"` until the first sync replaces it.
-        - any other value — bind to that existing custom audience on the platform. List the
-          candidates with `GET /workspaces/{workspace_id}/audiences/custom_audiences/fb`
-          (or `.../custom_audiences/tiktok`).
+        - any other value — bind to that existing custom audience on the platform. Pick one
+          from **List Facebook custom audiences** or **List TikTok custom audiences**.
 
         One binding per `(platform, ad_account_id)` pair: re-posting the same pair replaces its
         `external_audience_id` instead of failing.
@@ -2074,6 +2066,163 @@ paths:
               message:
                 type: string
       summary: Link audience to an ad account
+      tags:
+        - Audiences
+
+  '/workspaces/{workspace_id}/audiences/ad_accounts/fb':
+    get:
+      description: |
+        List the Facebook ad accounts connected to the workspace. Use an `id` from this list as
+        `ad_account_id` when linking an audience with `platform: "fb"`.
+
+        Only accounts with `is_active: true` can be linked.
+
+        When called with an `api_key`, the ad accounts of the user who created that `api_key` are
+        scanned from Facebook first, so the list also includes accounts that user has added on
+        Facebook since the last scan.
+      operationId: listFbAdAccounts
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: Facebook ad accounts returned
+          schema:
+            title: Facebook Ad Account List
+            type: object
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              data:
+                description: List of Facebook ad accounts
+                type: array
+                items:
+                  $ref: '#/definitions/FbAdAccount'
+      summary: List Facebook ad accounts
+      tags:
+        - Audiences
+
+  '/workspaces/{workspace_id}/audiences/ad_accounts/tiktok':
+    get:
+      description: |
+        List the TikTok ad accounts (advertisers) available to the workspace: those reachable
+        from the workspace's connected TikTok Business accounts plus those linked to its pages.
+        Use an `id` from this list as `ad_account_id` when linking an audience with
+        `platform: "tiktok"`.
+      operationId: listTiktokAdAccounts
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+      responses:
+        '200':
+          description: TikTok ad accounts returned
+          schema:
+            title: TikTok Ad Account List
+            type: object
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              data:
+                description: List of TikTok ad accounts
+                type: array
+                items:
+                  $ref: '#/definitions/TiktokAdAccount'
+      summary: List TikTok ad accounts
+      tags:
+        - Audiences
+
+  '/workspaces/{workspace_id}/audiences/custom_audiences/fb':
+    get:
+      description: |
+        List the custom audiences that already exist in a Facebook ad account. Use an `id` from
+        this list as `external_audience_id` to link an audience file to an existing Facebook
+        custom audience instead of creating a new one.
+
+        All pages are fetched from Facebook and returned in one response. An empty list is
+        returned when `ad_account_id` is missing, the ad account is not connected to the
+        workspace, or no usable Facebook access token is found for it.
+      operationId: listFbCustomAudiences
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - description: ID of the Facebook ad account, from **List Facebook ad accounts**.
+          in: query
+          name: ad_account_id
+          required: true
+          type: string
+      responses:
+        '200':
+          description: Facebook custom audiences returned
+          schema:
+            title: Facebook Custom Audience List
+            type: object
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              data:
+                description: List of Facebook custom audiences
+                type: array
+                items:
+                  $ref: '#/definitions/FbCustomAudience'
+      summary: List Facebook custom audiences
+      tags:
+        - Audiences
+
+  '/workspaces/{workspace_id}/audiences/custom_audiences/tiktok':
+    get:
+      description: |
+        List the custom audiences that already exist in a TikTok ad account. Use an `id` from
+        this list as `external_audience_id` to link an audience file to an existing TikTok
+        custom audience instead of creating a new one.
+
+        Paginated by `page` / `page_size`. An empty list is returned when `ad_account_id` is
+        missing or no TikTok access token is found for that advertiser.
+      operationId: listTiktokCustomAudiences
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - description: ID of the TikTok ad account (advertiser), from **List TikTok ad accounts**.
+          in: query
+          name: ad_account_id
+          required: true
+          type: string
+        - description: Page number for pagination (1-based).
+          in: query
+          name: page
+          required: false
+          type: integer
+          default: 1
+        - description: Number of audiences returned per page.
+          in: query
+          name: page_size
+          required: false
+          type: integer
+          default: 100
+        - description: Only return audiences whose name matches this value.
+          in: query
+          name: custom_audience_name
+          required: false
+          type: string
+        - description: Only return audiences of this TikTok audience type.
+          in: query
+          name: audience_type
+          required: false
+          type: string
+      responses:
+        '200':
+          description: TikTok custom audiences returned
+          schema:
+            title: TikTok Custom Audience List
+            type: object
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              data:
+                description: List of TikTok custom audiences
+                type: array
+                items:
+                  $ref: '#/definitions/TiktokCustomAudience'
+      summary: List TikTok custom audiences
       tags:
         - Audiences
 
@@ -3378,9 +3527,9 @@ definitions:
         example: fb
       ad_account_id:
         description: |
-          ID of the ad account, exactly as returned by
-          `GET /workspaces/{workspace_id}/audiences/ad_accounts/fb` (or `.../tiktok`). The ad
-          account must be connected to this workspace and active.
+          ID of the ad account, exactly as returned by **List Facebook ad accounts** or
+          **List TikTok ad accounts**. The ad account must be connected to this workspace and
+          active.
         type: string
       external_audience_id:
         description: |
@@ -3423,4 +3572,82 @@ definitions:
         type: string
         format: date-time
         readOnly: true
+  FbAdAccount:
+    title: Facebook Ad Account
+    type: object
+    description: A Facebook ad account connected to the workspace.
+    properties:
+      id:
+        description: ID of the ad account. Pass it as `ad_account_id` when linking an audience.
+        type: string
+      name:
+        description: Name of the ad account.
+        type: string
+      is_active:
+        description: Whether the ad account is active in the workspace. Only active accounts can be linked.
+        type: boolean
+
+  TiktokAdAccount:
+    title: TikTok Ad Account
+    type: object
+    description: A TikTok ad account (advertiser) available to the workspace.
+    properties:
+      id:
+        description: ID of the advertiser. Pass it as `ad_account_id` when linking an audience.
+        type: string
+      name:
+        description: Name of the advertiser.
+        type: string
+
+  FbCustomAudience:
+    title: Facebook Custom Audience
+    type: object
+    description: A custom audience that exists in a Facebook ad account.
+    properties:
+      id:
+        description: ID of the custom audience. Pass it as `external_audience_id` to link to it.
+        type: string
+      name:
+        description: Name of the custom audience.
+        type: string
+      subtype:
+        description: Facebook audience subtype (e.g. `CUSTOM`, `LOOKALIKE`, `ENGAGEMENT`).
+        type: string
+        example: CUSTOM
+      description:
+        description: Description of the custom audience.
+        type: string
+      approximate_count_lower_bound:
+        description: Lower bound of the estimated audience size, as reported by Facebook.
+        type: integer
+      approximate_count_upper_bound:
+        description: Upper bound of the estimated audience size, as reported by Facebook.
+        type: integer
+
+  TiktokCustomAudience:
+    title: TikTok Custom Audience
+    type: object
+    description: A custom audience that exists in a TikTok ad account.
+    properties:
+      id:
+        description: ID of the custom audience. Pass it as `external_audience_id` to link to it.
+        type: string
+      name:
+        description: Name of the custom audience.
+        type: string
+      audience_type:
+        description: TikTok audience type.
+        type: string
+      audience_subtype:
+        description: TikTok audience subtype.
+        type: string
+      calculate_type:
+        description: How TikTok computes the audience.
+        type: string
+      cover_num:
+        description: Estimated number of people in the audience, as reported by TikTok.
+        type: integer
+      is_valid:
+        description: Whether TikTok considers the audience usable for delivery.
+        type: boolean
 x-explorer-enabled: false

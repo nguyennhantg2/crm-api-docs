@@ -46,6 +46,8 @@ RESTful API documentation for Pancake CRM, including record management, deal man
 - `PUT /workspaces/{workspace_id}/audiences/{id}` — Update a custom audience file
 - `DELETE /workspaces/{workspace_id}/audiences/{id}` — Delete a custom audience file
 - `POST /workspaces/{workspace_id}/audiences/{audience_id}/platform_bindings` — Link the file to an FB / TikTok ad account
+- `GET /workspaces/{workspace_id}/audiences/ad_accounts/{fb|tiktok}` — List the ad accounts that can be linked
+- `GET /workspaces/{workspace_id}/audiences/custom_audiences/{fb|tiktok}` — List existing custom audiences in an ad account
 
 **Metadata**
 - `GET /workspaces/{workspace_id}/sources` — List customer sources
