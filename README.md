@@ -14,6 +14,7 @@ RESTful API documentation for Pancake CRM, including record management, deal man
 - Product management (list, create, update)
 - Customer sources
 - Pancake tags (record classification labels)
+- Custom audience files — filter-defined segments, linkable to Facebook / TikTok ad accounts
 - Real-time webhooks for record change events
 
 ## Main Endpoints
@@ -38,6 +39,13 @@ RESTful API documentation for Pancake CRM, including record management, deal man
 - `GET /workspaces/{workspace_id}/products` — List products
 - `POST /workspaces/{workspace_id}/products` — Create product
 - `PUT /workspaces/{workspace_id}/products/{product_id}` — Update product
+
+**Audiences**
+- `GET /workspaces/{workspace_id}/audiences` — List custom audience files
+- `POST /workspaces/{workspace_id}/audiences` — Create a custom audience file
+- `PUT /workspaces/{workspace_id}/audiences/{id}` — Update a custom audience file
+- `DELETE /workspaces/{workspace_id}/audiences/{id}` — Delete a custom audience file
+- `POST /workspaces/{workspace_id}/audiences/{audience_id}/platform_bindings` — Link the file to an FB / TikTok ad account
 
 **Metadata**
 - `GET /workspaces/{workspace_id}/sources` — List customer sources

@@ -232,6 +232,22 @@ parameters:
     type: integer
     default: 30
 
+  AudienceId:
+    description: The audience ID (UUID) — the custom audience file.
+    in: path
+    name: id
+    required: true
+    type: string
+    format: uuid
+
+  AudienceIdPath:
+    description: The audience ID (UUID) — the custom audience file.
+    in: path
+    name: audience_id
+    required: true
+    type: string
+    format: uuid
+
 tags:
   - description: Manage records in a table
     name: Records
@@ -247,6 +263,8 @@ tags:
     name: Sources
   - description: Manage record classification labels in a workspace
     name: PancakeTags
+  - description: Manage custom audience files and their links to ad accounts
+    name: Audiences
 
 paths:
   '/workspaces/{workspace_id}/{table_name}/records':
@@ -1791,6 +1809,274 @@ paths:
       tags:
         - PancakeTags
 
+  '/workspaces/{workspace_id}/audiences':
+    get:
+      description: |
+        List the custom audience files of the workspace, newest first. Deleted files are not
+        returned. The whole list comes back in one response — there is no pagination.
+
+        Each audience carries its `platform_bindings` (the ad accounts it is linked to) and
+        `total_customers`, the number of records currently in the file.
+      operationId: listAudiences
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - description: |
+            Only return audiences built from this table. Accepts one of:
+            - `lead`
+            - `account`
+            - `contact`
+          in: query
+          name: table_id
+          required: false
+          type: string
+          enum:
+            - lead
+            - account
+            - contact
+      responses:
+        '200':
+          description: Audience list returned
+          schema:
+            title: Audience List
+            type: object
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              data:
+                description: List of audience objects
+                type: array
+                items:
+                  $ref: '#/definitions/Audience'
+      summary: List audiences
+      tags:
+        - Audiences
+
+    post:
+      description: |
+        Create a custom audience file: a saved segment of records from one table
+        (`lead` / `account` / `contact`), described by the filter in `settings.filter`.
+
+        The members of the file are resolved asynchronously after this call returns, so the
+        response contains `settings.is_init_customers: true` and no members yet. Poll
+        `GET /workspaces/{workspace_id}/audiences` until the audience's `is_init_customers` is
+        `false` to know the build has finished.
+
+        Link the file to an ad account with
+        `POST /workspaces/{workspace_id}/audiences/{audience_id}/platform_bindings`.
+      operationId: createAudience
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - description: The audience to create. Must be wrapped in an `audience` object.
+          in: body
+          name: body
+          required: true
+          schema:
+            title: Create Audience Body
+            type: object
+            required:
+              - audience
+            properties:
+              audience:
+                $ref: '#/definitions/Audience'
+      responses:
+        '200':
+          description: Audience created successfully
+          schema:
+            title: Audience Response
+            type: object
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              data:
+                description: The created audience
+                $ref: '#/definitions/Audience'
+        '422':
+          description: Validation failed (e.g. `name` or `table_id` missing)
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                description: Always false for error responses
+                type: boolean
+              message:
+                type: string
+      summary: Create audience
+      tags:
+        - Audiences
+
+  '/workspaces/{workspace_id}/audiences/{id}':
+    put:
+      description: |
+        Update a custom audience file. Only the fields present in the body are changed.
+
+        `table_id` cannot be changed once the file exists — sending a different value fails
+        with `422`.
+
+        Changing `settings` re-resolves the members in the background when
+        `settings.auto_update_customer` is `true`; the response then carries
+        `settings.is_init_customers: true` instead of `total_customers`.
+      operationId: updateAudience
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/AudienceId'
+        - description: The fields to update. Must be wrapped in an `audience` object.
+          in: body
+          name: body
+          required: true
+          schema:
+            title: Update Audience Body
+            type: object
+            required:
+              - audience
+            properties:
+              audience:
+                $ref: '#/definitions/Audience'
+      responses:
+        '200':
+          description: Audience updated successfully
+          schema:
+            title: Audience Response
+            type: object
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              data:
+                description: The updated audience
+                $ref: '#/definitions/Audience'
+        '422':
+          description: |
+            Audience not found (`message: "not_found"`), or validation failed — including an
+            attempt to change `table_id`.
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                description: Always false for error responses
+                type: boolean
+              message:
+                type: string
+      summary: Update audience
+      tags:
+        - Audiences
+
+    delete:
+      description: |
+        Delete a custom audience file. The file is soft-deleted (`is_removed: true`) and stops
+        appearing in the audience list; the custom audiences already created on Facebook or
+        TikTok are **not** removed from those ad accounts.
+      operationId: deleteAudience
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/AudienceId'
+      responses:
+        '200':
+          description: Audience deleted successfully
+          schema:
+            title: Audience Delete Response
+            type: object
+            properties:
+              success:
+                description: Indicates whether the delete operation was successful
+                type: boolean
+        '422':
+          description: |
+            Audience not found — the response carries `message: "not_found"`.
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                description: Always false for error responses
+                type: boolean
+              message:
+                type: string
+      summary: Delete audience
+      tags:
+        - Audiences
+
+  '/workspaces/{workspace_id}/audiences/{audience_id}/platform_bindings':
+    post:
+      description: |
+        Link a custom audience file to an advertising ad account, so its members are pushed to
+        that platform as a custom audience.
+
+        `ad_account_id` must be an ad account already connected to the workspace — use the id
+        returned by `GET /workspaces/{workspace_id}/audiences/ad_accounts/fb` (or
+        `.../ad_accounts/tiktok`) exactly as given.
+
+        `external_audience_id` decides whether an audience is created or reused:
+        - `"add_audience"` — create a brand new custom audience on the platform and bind to it.
+          For `fb` the audience is created immediately (the response carries the real Facebook
+          custom audience id). For `tiktok` creation is deferred to the sync worker, so the
+          stored value stays `"add_audience"` until the first sync replaces it.
+        - any other value — bind to that existing custom audience on the platform. List the
+          candidates with `GET /workspaces/{workspace_id}/audiences/custom_audiences/fb`
+          (or `.../custom_audiences/tiktok`).
+
+        One binding per `(platform, ad_account_id)` pair: re-posting the same pair replaces its
+        `external_audience_id` instead of failing.
+
+        Members are pushed asynchronously. The binding starts at `status: "pending"` and the
+        worker moves it to `"synced"` or `"error"`. Facebook requires the ad account to have
+        accepted the Custom Audience terms of service — check with
+        `GET /workspaces/{workspace_id}/audiences/custom_audiences/fb/tos` first, otherwise the
+        sync fails.
+      operationId: createAudiencePlatformBinding
+      parameters:
+        - $ref: '#/parameters/WorkspaceId'
+        - $ref: '#/parameters/AudienceIdPath'
+        - description: The binding to create. Must be wrapped in a `binding` object.
+          in: body
+          name: body
+          required: true
+          schema:
+            title: Create Audience Platform Binding Body
+            type: object
+            required:
+              - binding
+            properties:
+              binding:
+                $ref: '#/definitions/AudiencePlatformBinding'
+      responses:
+        '200':
+          description: Binding created successfully
+          schema:
+            title: Audience Platform Binding Response
+            type: object
+            properties:
+              success:
+                description: Indicates whether the request was successful
+                type: boolean
+              data:
+                description: The created binding
+                $ref: '#/definitions/AudiencePlatformBinding'
+        '422':
+          description: |
+            Audience not found (`message: "not_found"`), validation failed, or the platform
+            audience could not be created. Known messages:
+            - `fb_token_missing` — the ad account is not connected to this workspace, or no
+              usable Facebook access token was found for it.
+            - `fb_create_failed` — Facebook rejected the custom audience creation. When
+              Facebook returns a user-facing reason, that reason is sent instead.
+            - `unsupported_platform` — `platform` is neither `fb` nor `tiktok`.
+          schema:
+            title: Error Response
+            type: object
+            properties:
+              success:
+                description: Always false for error responses
+                type: boolean
+              message:
+                type: string
+      summary: Link audience to an ad account
+      tags:
+        - Audiences
+
 definitions:
   Record:
     description: 'Creates a new record if it does not exist, otherwise updates the existing record based on a unique key'
@@ -2870,4 +3156,271 @@ definitions:
         description: Quantity of this service consumed per package (write) / included per package (read).
         type: integer
         example: 1
+  Audience:
+    title: Audience
+    type: object
+    description: |
+      A custom audience file — a named, filter-defined segment of the records in one table.
+      Its members are resolved in the background from `settings.filter` and can be pushed to
+      Facebook / TikTok ad accounts through `AudiencePlatformBinding`.
+    required:
+      - name
+      - table_id
+    properties:
+      id:
+        description: Audience ID.
+        type: string
+        format: uuid
+        readOnly: true
+      workspace_id:
+        description: ID of the workspace the audience belongs to.
+        type: integer
+        readOnly: true
+      name:
+        description: Name of the audience file. Also used as the custom audience name on the ad platform.
+        type: string
+        example: "Khách đã mua trong 30 ngày"
+      table_id:
+        description: |
+          Name of the table the audience is built from. Accepts one of:
+          - `lead`
+          - `account`
+          - `contact`
+
+          Cannot be changed after the audience has been created.
+        type: string
+        enum:
+          - lead
+          - account
+          - contact
+        example: contact
+      settings:
+        $ref: '#/definitions/AudienceSettings'
+      creator_id:
+        description: ID of the user who created the audience.
+        type: string
+        format: uuid
+        readOnly: true
+      version:
+        description: |
+          Internal build marker. A new value is generated every time the member list is
+          rebuilt; members carrying an older version are pruned at the end of the build.
+        type: string
+        format: uuid
+        readOnly: true
+      total_customers:
+        description: |
+          Number of records currently in the file. Always present in the list response.
+          Create — and an update that triggers a rebuild — omit it and return
+          `settings.is_init_customers: true` instead.
+        type: integer
+        readOnly: true
+        example: 1250
+      platform_bindings:
+        description: Ad accounts this audience is linked to.
+        type: array
+        items:
+          $ref: '#/definitions/AudiencePlatformBinding'
+        readOnly: true
+      is_removed:
+        description: Whether the audience has been soft-deleted.
+        type: boolean
+        default: false
+        readOnly: true
+      inserted_at:
+        description: The date and time when the audience was created (ISO 8601, UTC).
+        type: string
+        format: date-time
+        readOnly: true
+      updated_at:
+        description: The date and time when the audience was last modified (ISO 8601, UTC).
+        type: string
+        format: date-time
+        readOnly: true
+
+  AudienceSettings:
+    title: Audience Settings
+    type: object
+    description: Configuration of the audience file — how its members are selected and refreshed.
+    properties:
+      filter:
+        $ref: '#/definitions/AudienceFilter'
+      auto_update_customer:
+        description: |
+          When `true`, the member list is kept in sync with the filter: records are added and
+          removed as they start or stop matching. When `false`/omitted the file is only built
+          once, at creation.
+        type: boolean
+        example: true
+      update_daily_customer:
+        description: |
+          Derived, do not send: set automatically when `filter.last_interaction` or
+          `filter.last_purchased` is given as a number of days, because such a rolling window
+          has to be re-evaluated every day. Cleared when neither is.
+        type: boolean
+        readOnly: true
+      is_init_customers:
+        description: |
+          `true` while the member list is being (re)built in the background. A create — or an
+          update that touches `settings` with `auto_update_customer` enabled — returns `true`
+          here and omits `total_customers`.
+        type: boolean
+        readOnly: true
+
+  AudienceFilter:
+    title: Audience Filter
+    type: object
+    description: |
+      The conditions a record must satisfy to belong to the audience file. All conditions given
+      are combined with **AND**. Omit a key to leave that dimension unconstrained.
+
+      Range values are two-element arrays `[from, to]`; either end may be `null` for an open
+      range. Day-count values (`last_interaction`, `last_purchased`) may instead be given as an
+      integer number of days back from today — a rolling window, evaluated in the workspace
+      timezone and refreshed daily.
+    properties:
+      status:
+        description: Record `status` values to include.
+        type: array
+        items:
+          type: string
+        example: ["New", "Working"]
+      source_ids:
+        description: |
+          Source IDs the record must have come from.
+          [Source schema](#/schemas/Source)
+        type: array
+        items:
+          type: string
+        example: ["-1", "1246063395260410"]
+      pancake_tag:
+        description: |
+          Pancake tag IDs applied to the record.
+          [Pancake Tag schema](#/schemas/PancakeTag)
+        type: array
+        items:
+          type: string
+        example: ["104943019063372_11"]
+      owner:
+        description: IDs of the users owning the record.
+        type: array
+        items:
+          type: string
+          format: uuid
+      full_address:
+        description: |
+          Address components to match, as stored on the record — free-text address, country
+          code and/or province id.
+        type: array
+        items:
+          type: string
+        example: ["84", "84_VN107"]
+      age:
+        description: Age range in years, derived from the record's `birthday`.
+        type: array
+        items:
+          type: integer
+        example: [18, 35]
+      last_interaction:
+        description: |
+          How recently the record was interacted with, measured by its most recent note.
+          Either an integer number of days back from today, or an explicit
+          `[since, until]` pair of ISO 8601 datetimes.
+        example: 30
+      order_count:
+        description: Range of the number of orders attached to the record.
+        type: array
+        items:
+          type: integer
+        example: [1, null]
+      purchased_amount:
+        description: |
+          Range of the total amount the record has paid, summed over its orders in
+          `successful` status.
+        type: array
+        items:
+          type: integer
+        example: [500000, null]
+      last_purchased:
+        description: |
+          How recently the record last had an order reach `successful` status. Either an
+          integer number of days back from today, or an explicit `[since, until]` pair of
+          ISO 8601 datetimes.
+        example: 30
+      purchased_products:
+        description: |
+          IDs of products the record must have bought. Only applies to the `contact` table.
+          [Product schema](#/schemas/Product)
+        type: array
+        items:
+          type: string
+          format: uuid
+
+  AudiencePlatformBinding:
+    title: Audience Platform Binding
+    type: object
+    description: |
+      The link between a custom audience file and one ad account. Unique per
+      `(audience, platform, ad_account_id)`.
+    required:
+      - platform
+      - ad_account_id
+    properties:
+      platform:
+        description: |
+          The ad platform. Accepts one of:
+          - `fb`
+          - `tiktok`
+        type: string
+        enum:
+          - fb
+          - tiktok
+        example: fb
+      ad_account_id:
+        description: |
+          ID of the ad account, exactly as returned by
+          `GET /workspaces/{workspace_id}/audiences/ad_accounts/fb` (or `.../tiktok`). The ad
+          account must be connected to this workspace and active.
+        type: string
+      external_audience_id:
+        description: |
+          ID of the custom audience on the platform. Send `add_audience` to have a new custom
+          audience created and bound; send an existing custom audience ID to bind to it.
+
+          On read this is the platform's own ID — except for a TikTok binding whose audience has
+          not been created yet, which still reads `add_audience`.
+        type: string
+        example: add_audience
+      status:
+        description: |
+          Sync state of the binding:
+          - `pending` — queued, members not pushed yet
+          - `synced` — members pushed to the platform
+          - `error` — the push failed
+        type: string
+        enum:
+          - pending
+          - synced
+          - error
+        default: pending
+        readOnly: true
+      audience_id:
+        description: ID of the audience file this binding belongs to.
+        type: string
+        format: uuid
+        readOnly: true
+      workspace_id:
+        description: ID of the workspace the binding belongs to.
+        type: integer
+        readOnly: true
+      inserted_at:
+        description: The date and time when the binding was created (ISO 8601, UTC).
+        type: string
+        format: date-time
+        readOnly: true
+      updated_at:
+        description: The date and time when the binding was last modified (ISO 8601, UTC).
+        type: string
+        format: date-time
+        readOnly: true
 x-explorer-enabled: false
